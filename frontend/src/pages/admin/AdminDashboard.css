@@ -1,0 +1,100 @@
+.admin-actions {
+	display: flex;
+	justify-content: flex-start;
+	gap: 14px;
+	align-items: center;
+	flex-wrap: nowrap;
+}
+
+.admin-action-btn {
+	height: 38px;
+	min-width: 134px;
+	padding: 0 18px;
+	border: none;
+	border-radius: 999px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	font-size: 15px;
+	font-weight: 700;
+	line-height: 1;
+	cursor: pointer;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+	transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
+}
+
+.admin-editor-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+
+.dealer-main__header--stacked {
+	align-items: flex-start;
+	gap: 14px;
+}
+
+.admin-action-btn:hover {
+	transform: translateY(-1px);
+	filter: brightness(1.03);
+}
+
+.admin-action-btn svg {
+	width: 15px;
+	height: 15px;
+	flex-shrink: 0;
+}
+
+.admin-action-btn--edit {
+	background: #3f4c79;
+	color: #f7fbff;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.admin-action-btn--edit svg {
+	color: #d9e3ff;
+}
+
+.admin-action-btn--view {
+	background: #6d6d6d;
+	color: #f7fbff;
+}
+
+.admin-action-btn--view svg {
+	color: #edf2ff;
+}
+
+.admin-action-btn--save {
+	background: #2f8f5b;
+	color: #f7fbff;
+}
+
+.admin-action-btn--save svg {
+	color: #effff4;
+}
+
+.admin-action-btn--cancel {
+	background: #8a3a3a;
+	color: #f7fbff;
+}
+
+.admin-action-btn--cancel svg {
+	color: #fff0f0;
+}
+
+@media (max-width: 1100px) {
+	.admin-actions {
+		gap: 10px;
+	}
+
+	.admin-editor-actions {
+		justify-content: flex-start;
+	}
+
+	.admin-action-btn {
+		min-width: 120px;
+		padding: 0 16px;
+	}
+}
