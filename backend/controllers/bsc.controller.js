@@ -1,5 +1,6 @@
 const XLSX = require('xlsx');
 const BscScore = require('../models/BscScore.model');
+const { parseBscWorkbook } = require('../utils/bscExcelParser');
 
 const metricValue = (metric, key) => {
   if (metric && typeof metric === 'object') {
@@ -267,11 +268,80 @@ const updateBscScore = async (req, res, next) => {
     next(error);
   }
 };
+const uploadBscExcel = async (req, res, next) => {
+  try {
+    if (!req.file?.buffer) {
+      return res.status(400).json({ message: 'Please upload an Excel file.' });
+    }
 
+    const { fiscalYear, month } = req.body;
+
+    const scores = parseBscWorkbook(req.file.buffer, {
+      fiscalYear,
+      month,
+    });
+
+    if (!scores.length) {
+      return res.status(400).json({ message: 'No valid dealer rows found in Excel.' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Excel parsed successfully.',
+      count: scores.length,
+      data: scores,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+const bulkSaveBscScores = async (req, res, next) => {
+  try {
+    const scores = req.body?.scores || [];
+
+    if (!Array.isArray(scores) || scores.length === 0) {
+      return res.status(400).json({ message: 'No scorecards received for saving.' });
+    }
+
+    const savedScores = [];
+
+    for (const rawScore of scores) {
+      const payload = normalizeBscPayload(rawScore);
+
+      const savedScore = await BscScore.findOneAndUpdate(
+        {
+          dealerCode: payload.dealerCode,
+          fiscalYear: payload.fiscalYear,
+          month: payload.month,
+        },
+        { $set: payload },
+        {
+          upsert: true,
+          new: true,
+          runValidators: true,
+          setDefaultsOnInsert: true,
+        }
+      );
+
+      savedScores.push(savedScore);
+    }
+
+    res.json({
+      success: true,
+      message: `${savedScores.length} scorecards saved successfully.`,
+      count: savedScores.length,
+      data: savedScores,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 module.exports = {
   getBscScore,
   getBscScoreById,
   downloadScoreSheet,
   createBscScore,
   updateBscScore,
+  uploadBscExcel,
+  bulkSaveBscScores,
 };

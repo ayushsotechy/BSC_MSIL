@@ -7,6 +7,7 @@ import './AdminDashboard.css';
 import '../../pages/dealer/DealerDashboard.css';
 import '../msil/MsilDashboard.css';
 
+
 const cloneScore = (score) => ({
   ...score,
   earlyBird: { ...(score.earlyBird || {}) },
@@ -128,6 +129,9 @@ const AdminDashboard = ({ readOnly = false }) => {
   const [tableRows, setTableRows] = useState([]);
   const [nscRows, setNscRows] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isUploadingExcel, setIsUploadingExcel] = useState(false);
+const [parsedExcelScores, setParsedExcelScores] = useState([]);
+const [isSavingBulk, setIsSavingBulk] = useState(false);
 
   const fetchMasterData = async () => {
     try {
@@ -160,6 +164,59 @@ const AdminDashboard = ({ readOnly = false }) => {
     setIsEditing(editing);
   };
 
+  const handleExcelUpload = async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  try {
+    setIsUploadingExcel(true);
+
+    const response = await bscService.uploadExcel({
+      file,
+      fiscalYear: 'FY 25-26',
+      month: "Dec'25",
+    });
+
+    const parsedScores = response.data || [];
+
+    if (!parsedScores.length) {
+      alert('No valid scorecards found in Excel.');
+      return;
+    }
+
+    setParsedExcelScores(parsedScores);
+
+    alert(`Excel parsed successfully. ${parsedScores.length} dealers found. Please review preview and click Save All Dealers.`);
+  } catch (error) {
+    console.error('Excel upload failed:', error);
+    alert(error.response?.data?.message || 'Excel upload failed. Check console.');
+  } finally {
+    setIsUploadingExcel(false);
+    e.target.value = '';
+  }
+};
+const handleBulkSaveScores = async () => {
+  if (!parsedExcelScores.length) {
+    alert('No parsed scorecards to save.');
+    return;
+  }
+
+  try {
+    setIsSavingBulk(true);
+
+    const response = await bscService.bulkSaveScores(parsedExcelScores);
+
+    alert(response.message || `${response.count || 0} scorecards saved successfully.`);
+
+    setParsedExcelScores([]);
+    await fetchMasterData();
+  } catch (error) {
+    console.error('Bulk save failed:', error);
+    alert(error.response?.data?.message || 'Failed to save parsed scorecards.');
+  } finally {
+    setIsSavingBulk(false);
+  }
+};
   const handleAddNewScore = () => {
     if (readOnly) return;
     // Generate an empty master template for a new entry
@@ -282,15 +339,73 @@ const AdminDashboard = ({ readOnly = false }) => {
                 {activeTab === 'nsc' ? 'View NSC Master Data' : 'View BSC Master Data'}
               </h2>
               
-              {!readOnly && (
-              <button 
-                className="admin-action-btn admin-action-btn--save" 
-                style={{ padding: '10px 16px', background: '#4a6ee0', color: 'white', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
-                onClick={handleAddNewScore}
-              >
-                + Add New {activeTab === 'nsc' ? 'NSC' : 'BSC'} Score
-              </button>
-              )}
+  {!readOnly && (
+  <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+    {activeTab === 'bsc' && (
+      <>
+        <label
+          className="admin-action-btn admin-action-btn--save"
+          style={{
+            padding: '10px 16px',
+            background: '#16a34a',
+            color: 'white',
+            borderRadius: '6px',
+            border: 'none',
+            cursor: isUploadingExcel ? 'not-allowed' : 'pointer',
+            fontWeight: 'bold',
+            opacity: isUploadingExcel ? 0.7 : 1,
+          }}
+        >
+          {isUploadingExcel ? 'Uploading...' : 'Upload Excel'}
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleExcelUpload}
+            disabled={isUploadingExcel}
+            style={{ display: 'none' }}
+          />
+        </label>
+
+        {parsedExcelScores.length > 0 && (
+          <button
+            className="admin-action-btn admin-action-btn--save"
+            type="button"
+            onClick={handleBulkSaveScores}
+            disabled={isSavingBulk}
+            style={{
+              padding: '10px 16px',
+              background: '#dc2626',
+              color: 'white',
+              borderRadius: '6px',
+              border: 'none',
+              cursor: isSavingBulk ? 'not-allowed' : 'pointer',
+              fontWeight: 'bold',
+              opacity: isSavingBulk ? 0.7 : 1,
+            }}
+          >
+            {isSavingBulk ? 'Saving...' : `Save All Dealers (${parsedExcelScores.length})`}
+          </button>
+        )}
+      </>
+    )}
+
+    <button
+      className="admin-action-btn admin-action-btn--save"
+      style={{
+        padding: '10px 16px',
+        background: '#4a6ee0',
+        color: 'white',
+        borderRadius: '6px',
+        border: 'none',
+        cursor: 'pointer',
+        fontWeight: 'bold',
+      }}
+      onClick={handleAddNewScore}
+    >
+      + Add New {activeTab === 'nsc' ? 'NSC' : 'BSC'} Score
+    </button>
+  </div>
+)}
             </div>
 
             {/* FILTER PANEL */}
@@ -339,72 +454,214 @@ const AdminDashboard = ({ readOnly = false }) => {
             </div>
 
             {/* NSC DATA TABLE */}
-            {activeTab === 'nsc' ? (
-              <div className="msil-table-shell">
-                <table className="msil-table">
-                  <thead>
-                    <tr><th>Sl No.</th><th>Region</th><th>Dealer Name</th><th>Last Year Band</th><th>Current Year Band</th><th>Year</th><th>Action</th></tr>
-                  </thead>
-                  <tbody>
-                    {isLoading ? (
-                      <tr><td colSpan="7" style={{ textAlign: 'center', padding: '20px' }}>Loading Data...</td></tr>
-                    ) : nscRows.length === 0 ? (
-                      <tr><td colSpan="7" style={{ textAlign: 'center', padding: '20px', color: '#6b7280' }}>No NSC Master Data found in database.</td></tr>
-                    ) : (
-                      nscRows.map((row, index) => (
-                        <tr key={row._id || index}>
-                          <td>{index + 1}</td> 
-                          <td>{row.region || '-'}</td>
-                          <td>{row.dealerName || '-'}</td>
-                          <td>{row.fullYear?.band || '-'}</td>
-                          <td>{row.earlyBird?.band || '-'}</td>
-                          <td>{row.fiscalYear || '-'}</td>
-                          <td>
-                            <div className="admin-actions">
-                              {!readOnly && <button className="admin-action-btn admin-action-btn--edit" type="button" onClick={() => openDealerScore(row, true, 'nsc')}>Edit</button>}
-                              <button className="admin-action-btn admin-action-btn--view" type="button" onClick={() => openDealerScore(row, false, 'nsc')}>View</button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
+{activeTab === 'nsc' ? (
+  <div className="msil-table-shell">
+    <table className="msil-table">
+      <thead>
+        <tr>
+          <th>Sl No.</th>
+          <th>Region</th>
+          <th>Dealer Name</th>
+          <th>Last Year Band</th>
+          <th>Current Year Band</th>
+          <th>Year</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {isLoading ? (
+          <tr>
+            <td colSpan="7" style={{ textAlign: 'center', padding: '20px' }}>
+              Loading Data...
+            </td>
+          </tr>
+        ) : nscRows.length === 0 ? (
+          <tr>
+            <td colSpan="7" style={{ textAlign: 'center', padding: '20px', color: '#6b7280' }}>
+              No NSC Master Data found in database.
+            </td>
+          </tr>
+        ) : (
+          nscRows.map((row, index) => (
+            <tr key={row._id || index}>
+              <td>{index + 1}</td>
+              <td>{row.region || '-'}</td>
+              <td>{row.dealerName || '-'}</td>
+              <td>{row.fullYear?.band || '-'}</td>
+              <td>{row.earlyBird?.band || '-'}</td>
+              <td>{row.fiscalYear || '-'}</td>
+              <td>
+                <div className="admin-actions">
+                  {!readOnly && (
+                    <button
+                      className="admin-action-btn admin-action-btn--edit"
+                      type="button"
+                      onClick={() => openDealerScore(row, true, 'nsc')}
+                    >
+                      Edit
+                    </button>
+                  )}
+                  <button
+                    className="admin-action-btn admin-action-btn--view"
+                    type="button"
+                    onClick={() => openDealerScore(row, false, 'nsc')}
+                  >
+                    View
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))
+        )}
+      </tbody>
+    </table>
+  </div>
+) : (
+  <>
+    {/* EXCEL PREVIEW BEFORE SAVE */}
+    {parsedExcelScores.length > 0 && (
+      <div
+        style={{
+          marginBottom: '20px',
+          padding: '16px',
+          border: '1px solid #bbf7d0',
+          background: '#f0fdf4',
+          borderRadius: '8px',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '12px',
+            gap: '12px',
+          }}
+        >
+          <div>
+            <strong>{parsedExcelScores.length} dealers parsed from Excel.</strong>
+            <div style={{ fontSize: '13px', color: '#166534', marginTop: '4px' }}>
+              Review the preview below, then click Save All Dealers.
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setParsedExcelScores([])}
+            style={{
+              padding: '8px 12px',
+              border: '1px solid #d1d5db',
+              borderRadius: '6px',
+              background: 'white',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Clear Preview
+          </button>
+        </div>
+
+        <div className="msil-table-shell">
+          <table className="msil-table">
+            <thead>
+              <tr>
+                <th>Sl No.</th>
+                <th>Region</th>
+                <th>Dealer Name</th>
+                <th>Dealer Code</th>
+                <th>Early Bird Score</th>
+                <th>Full Year Score</th>
+                <th>Early Bird Band</th>
+              </tr>
+            </thead>
+            <tbody>
+              {parsedExcelScores.slice(0, 10).map((score, index) => (
+                <tr key={`${score.dealerCode}-${index}`}>
+                  <td>{index + 1}</td>
+                  <td>{score.region || '-'}</td>
+                  <td>{score.dealerName || '-'}</td>
+                  <td>{score.dealerCode || '-'}</td>
+                  <td>{score.earlyBird?.provisionalScore || '-'}</td>
+                  <td>{score.fullYear?.provisionalScore || '-'}</td>
+                  <td>{score.earlyBird?.band || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {parsedExcelScores.length > 10 && (
+          <div style={{ marginTop: '10px', fontSize: '13px', color: '#166534' }}>
+            Showing first 10 dealers only. Total parsed: {parsedExcelScores.length}.
+          </div>
+        )}
+      </div>
+    )}
+
+    {/* BSC DATA TABLE */}
+    <div className="msil-table-shell">
+      <table className="msil-table">
+        <thead>
+          <tr>
+            <th>Sl No.</th>
+            <th>Region</th>
+            <th>Dealer Name</th>
+            <th>Dealer Code</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {isLoading ? (
+            <tr>
+              <td colSpan="7" style={{ textAlign: 'center', padding: '20px' }}>
+                Loading Data...
+              </td>
+            </tr>
+          ) : tableRows.length === 0 ? (
+            <tr>
+              <td colSpan="7" style={{ textAlign: 'center', padding: '20px', color: '#6b7280' }}>
+                No BSC Master Data found in database.
+              </td>
+            </tr>
+          ) : (
+            tableRows.map((row, index) => (
+              <tr key={row._id || index}>
+                <td>{index + 1}</td>
+                <td>{row.region || '-'}</td>
+                <td>{row.dealerName || '-'}</td>
+                <td>{row.dealerCode || '-'}</td>
+                <td>Dealer</td>
+                <td>Active</td>
+                <td>
+                  <div className="admin-actions">
+                    {!readOnly && (
+                      <button
+                        className="admin-action-btn admin-action-btn--edit"
+                        type="button"
+                        onClick={() => openDealerScore(row, true, 'bsc')}
+                      >
+                        Edit
+                      </button>
                     )}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              /* BSC DATA TABLE */
-              <div className="msil-table-shell">
-                <table className="msil-table">
-                  <thead>
-                    <tr><th>Sl No.</th><th>Region</th><th>Dealer Name</th><th>Dealer Code</th><th>Role</th><th>Status</th><th>Action</th></tr>
-                  </thead>
-                  <tbody>
-                    {isLoading ? (
-                      <tr><td colSpan="7" style={{ textAlign: 'center', padding: '20px' }}>Loading Data...</td></tr>
-                    ) : tableRows.length === 0 ? (
-                      <tr><td colSpan="7" style={{ textAlign: 'center', padding: '20px', color: '#6b7280' }}>No BSC Master Data found in database.</td></tr>
-                    ) : (
-                      tableRows.map((row, index) => (
-                        <tr key={row._id || index}>
-                          <td>{index + 1}</td>
-                          <td>{row.region || '-'}</td>
-                          <td>{row.dealerName || '-'}</td>
-                          <td>{row.dealerCode || '-'}</td>
-                          <td>Dealer</td>
-                          <td>Active</td>
-                          <td>
-                            <div className="admin-actions">
-                              {!readOnly && <button className="admin-action-btn admin-action-btn--edit" type="button" onClick={() => openDealerScore(row, true, 'bsc')}>Edit</button>}
-                              <button className="admin-action-btn admin-action-btn--view" type="button" onClick={() => openDealerScore(row, false, 'bsc')}>View</button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                    <button
+                      className="admin-action-btn admin-action-btn--view"
+                      type="button"
+                      onClick={() => openDealerScore(row, false, 'bsc')}
+                    >
+                      View
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  </>
+)}          
           </section>
         </main>
       </div>

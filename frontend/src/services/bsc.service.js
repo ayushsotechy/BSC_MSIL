@@ -28,6 +28,27 @@ const bscService = {
     const { data } = await api.put(`/bsc/score/${id}`, scoreData);
     return data;
   },
+  
+  uploadExcel: async ({ file, fiscalYear, month }) => {
+  const formData = new FormData();
+  
+
+  formData.append('file', file);
+  if (fiscalYear) formData.append('fiscalYear', fiscalYear);
+  if (month) formData.append('month', month);
+
+  const { data } = await api.post('/bsc/upload-excel', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+
+  return data;
+},
+bulkSaveScores: async (scores) => {
+  const { data } = await api.post('/bsc/bulk-save', { scores });
+  return data;
+},
 };
 
 export const triggerDownload = (response, filename) => {

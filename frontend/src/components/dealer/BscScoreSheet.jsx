@@ -222,6 +222,13 @@ const normalizeBusinessAreas = (businessAreas = []) => {
 };
 
 const getTotalValue = (area, period, key) => {
+  const total = area?.[`${period}Total`];
+
+  if (key === 'achieved' && total !== undefined && total !== null && total !== '') {
+    if (total && typeof total === 'object') return metricValue(total, key);
+    return toNumber(total);
+  }
+
   const parameters = area?.parameters || [];
 
   if (parameters.length) {
@@ -230,10 +237,6 @@ const getTotalValue = (area, period, key) => {
       0,
     );
   }
-
-  const total = area?.[`${period}Total`];
-  if (total && typeof total === 'object') return metricValue(total, key);
-  if (key === 'achieved') return toNumber(total);
 
   return 0;
 };
