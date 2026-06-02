@@ -1,29 +1,29 @@
 const mongoose = require('mongoose');
 
 const bscParameterSchema = new mongoose.Schema({
-  sNo: { type: Number, required: true },
+  sNo: { type: mongoose.Schema.Types.Mixed, required: true }, // Changed to Mixed to support '14a', '14b'
   parameter: { type: String, required: true },
-  accessConditionMet: { type: String }, // e.g. "Y I N I N (Q1 I Q2 I Q3)"
+  accessConditionMet: { type: String }, 
   earlyBird: {
     maxPoints: { type: Number, default: 0 },
     minPoints: { type: Number, default: 0 },
     minArchived: { type: Number, default: 0 },
-    achieved: { type: Number, default: 0 },
+    achieved: { type: Number, default: 0 }, // <-- Editable
   },
   fullYear: {
     maxPoints: { type: Number, default: 0 },
     minPoints: { type: Number, default: 0 },
     minArchived: { type: Number, default: 0 },
-    achieved: { type: Number, default: 0 },
+    achieved: { type: Number, default: 0 }, // <-- Editable
   },
-});
+}, { _id: false }); // Prevents Mongoose from creating an _id for every single parameter
 
 const businessAreaSchema = new mongoose.Schema({
   areaName: { type: String, required: true },
   parameters: [bscParameterSchema],
   earlyBirdTotal: { type: Number, default: 0 },
   fullYearTotal: { type: Number, default: 0 },
-});
+}, { _id: false });
 
 const bscScoreSchema = new mongoose.Schema(
   {
@@ -32,19 +32,18 @@ const bscScoreSchema = new mongoose.Schema(
       required: true,
       ref: 'User',
     },
-    dealerName: { type: String, required: true },
-    region: { type: String, required: true },
-    fiscalYear: { type: String, required: true }, // e.g. "FY 25-26"
-    month: { type: String, required: true }, // e.g. "Dec'25"
+    dealerName: { type: String, required: true }, // Editable
+    region: { type: String, required: true },     // Editable
+    fiscalYear: { type: String, required: true }, 
+    month: { type: String, required: true }, 
     provisionalType: {
       type: String,
       enum: ['provisional', 'final'],
       default: 'provisional',
     },
 
-    // Summary scores
     earlyBird: {
-      provisionalScore: { type: String }, // e.g. "601/960"
+      provisionalScore: { type: String }, 
       provisionalScorePercent: { type: String },
       qualification: { type: String, enum: ['Y', 'N'], default: 'N' },
       band: {
@@ -64,7 +63,6 @@ const bscScoreSchema = new mongoose.Schema(
       },
     },
 
-    // Detailed breakdown
     businessAreas: [businessAreaSchema],
 
     createdBy: {
@@ -79,7 +77,6 @@ const bscScoreSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Compound index for fast lookups
 bscScoreSchema.index({ dealerCode: 1, fiscalYear: 1, month: 1 }, { unique: true });
 
 module.exports = mongoose.model('BscScore', bscScoreSchema);

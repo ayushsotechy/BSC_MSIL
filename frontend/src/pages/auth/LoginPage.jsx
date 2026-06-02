@@ -8,7 +8,7 @@ const LoginPage = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, signupDealer } = useAuth();
   const navigate = useNavigate();
 
   const handleLogin = async (role) => {
@@ -22,7 +22,24 @@ const LoginPage = () => {
       toast.success(`Welcome back!`);
       navigate(`/${user.role}/dashboard`);
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Login failed. Please try again.');
+      toast.error(err?.message || err?.response?.data?.message || 'Login failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDealerSignup = async () => {
+    if (!username.trim()) {
+      toast.error('Enter dealer code as username');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await signupDealer(username, password || '1234');
+      toast.success('Dealer login created. Use the dealer login button now.');
+    } catch (err) {
+      toast.error(err?.message || 'Signup failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -224,7 +241,16 @@ const LoginPage = () => {
               onClick={() => handleLogin('dealer')}
               disabled={loading}
             >
-              {loading ? 'Logging in...' : 'Login'}
+              {loading ? 'Logging in...' : 'Dealer Login'}
+            </button>
+
+            <button
+              className="login-card__btn login-card__btn--dealer"
+              onClick={handleDealerSignup}
+              disabled={loading}
+              type="button"
+            >
+              Create Dealer Login
             </button>
 
             <div className="login-card__or">
@@ -237,7 +263,7 @@ const LoginPage = () => {
               onClick={() => handleLogin('msil')}
               disabled={loading}
             >
-              {loading ? 'Logging in...' : 'Login'}
+              {loading ? 'Logging in...' : 'MSIL Login'}
             </button>
 
             {/* Admin link */}

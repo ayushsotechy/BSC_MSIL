@@ -14,15 +14,14 @@
   box-shadow: none;
 }
 
-.navbar__logo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
 .navbar__logo-icon {
   width: 30px;
   height: 30px;
+}
+
+.navbar__brand {
+ display: flex;
+  align-items: center;
 }
 
 .navbar__logo-text {
@@ -35,7 +34,31 @@
 .navbar__right {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
+}
+
+.navbar__brand-mark {
+  height: 45px; /* Increase the base height */
+  width: auto;
+  
+  /* Force the white background to disappear */
+  mix-blend-mode: multiply; 
+  
+  /* This is the magic! Zoom in by 40% to crop out the built-in white space */
+  transform: scale(2.0); 
+  
+  /* Ensures it zooms from the left side so it doesn't overlap your menu */
+  transform-origin: left center; 
+  
+  /* A slight nudge to align it perfectly with your left margin */
+  margin-left: 10px;
+}
+
+.navbar__brand-text {
+  font-size: 16px;
+  font-weight: 800;
+  color: #293bb3;
+  letter-spacing: 0.06em;
 }
 
 .navbar__powered {
@@ -100,6 +123,24 @@
   display: flex;
   flex-direction: column;
   line-height: 1.2;
+}
+
+@media (max-width: 900px) {
+  .navbar {
+    padding: 0 16px;
+  }
+
+  .navbar__powered {
+    display: none;
+  }
+
+  .navbar__brand-text {
+    font-size: 12px;
+  }
+
+  .navbar__user-info {
+    display: none;
+  }
 }
 
 .navbar__user-name {

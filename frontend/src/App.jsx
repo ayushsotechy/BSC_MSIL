@@ -29,6 +29,7 @@ function App() {
           {/* MSIL */}
           <Route element={<ProtectedRoute allowedRoles={['msil']} />}>
             <Route path="/msil/dashboard" element={<MsilDashboard />} />
+            <Route path="/msil/access-credentials" element={<AccessCredentialsPage dashboardPath="/msil/dashboard" />} />
           </Route>
 
           {/* Admin */}

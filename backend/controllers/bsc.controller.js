@@ -1,6 +1,85 @@
 const XLSX = require('xlsx');
 const BscScore = require('../models/BscScore.model');
 
+const metricValue = (metric, key) => {
+  if (metric && typeof metric === 'object') {
+    if (key === 'achieved') return metric.achieved ?? metric.pointsAchieved ?? 0;
+    return metric[key] ?? 0;
+  }
+  return metric ?? 0;
+};
+
+const toNumber = (value) => {
+  const numericValue = Number(value);
+  return Number.isNaN(numericValue) ? 0 : numericValue;
+};
+
+const normalizeMetric = (metric = {}) => ({
+  maxPoints: toNumber(metricValue(metric, 'maxPoints')),
+  minPoints: toNumber(metricValue(metric, 'minPoints')),
+  achieved: toNumber(metricValue(metric, 'achieved')),
+});
+
+const metricTotal = (area, period) => {
+  const parameters = area?.parameters || [];
+
+  if (parameters.length) {
+    return parameters.reduce(
+      (sum, param) => sum + toNumber(metricValue(param?.[period], 'achieved')),
+      0
+    );
+  }
+
+  const total = area?.[`${period}Total`];
+  if (total && typeof total === 'object') return toNumber(metricValue(total, 'achieved'));
+  if (total !== undefined && total !== null) {
+    return toNumber(total);
+  }
+
+  return 0;
+};
+
+const normalizeBscPayload = (payload) => ({
+  dealerCode: String(payload?.dealerCode || '').trim(),
+  dealerName: String(payload?.dealerName || '').trim(),
+  region: String(payload?.region || '').trim(),
+  fiscalYear: String(payload?.fiscalYear || '').trim(),
+  month: String(payload?.month || '').trim(),
+  provisionalType: payload?.provisionalType || 'provisional',
+  earlyBird: {
+    provisionalScore: payload?.earlyBird?.provisionalScore || '',
+    provisionalScorePercent: payload?.earlyBird?.provisionalScorePercent || '',
+    qualification: payload?.earlyBird?.qualification || 'N',
+    band: payload?.earlyBird?.band || '',
+  },
+  fullYear: {
+    provisionalScore: payload?.fullYear?.provisionalScore || '',
+    provisionalScorePercent: payload?.fullYear?.provisionalScorePercent || '',
+    qualification: payload?.fullYear?.qualification || 'N',
+    band: payload?.fullYear?.band || '',
+  },
+  businessAreas: (payload?.businessAreas || []).map((area) => ({
+    areaName: area?.areaName || '',
+    earlyBirdTotal: metricTotal(area, 'earlyBird'),
+    fullYearTotal: metricTotal(area, 'fullYear'),
+    parameters: (area?.parameters || []).map((param) => ({
+      sNo: param?.sNo,
+      parameter: param?.parameter || param?.name || '',
+      accessConditionMet: param?.accessConditionMet || param?.condition || '',
+      earlyBird: normalizeMetric(param?.earlyBird || {
+        maxPoints: param?.ebMax,
+        minPoints: param?.ebMin,
+        achieved: param?.ebAchieved,
+      }),
+      fullYear: normalizeMetric(param?.fullYear || {
+        maxPoints: param?.fyMax,
+        minPoints: param?.fyMin,
+        achieved: param?.fyAchieved,
+      }),
+    })),
+  })),
+});
+
 // @desc    Get BSC score for dealer
 // @route   GET /api/bsc/score
 // @access  Private (dealer, msil, admin)
@@ -10,8 +89,8 @@ const getBscScore = async (req, res, next) => {
 
     let query = {};
 
-    // Dealers can only see their own scores
-    if (req.user.role === 'dealer') {
+    // Safely check if req.user exists before checking role
+    if (req.user?.role === 'dealer') {
       query.dealerCode = req.user.dealerCode;
     } else if (dealerCode) {
       query.dealerCode = dealerCode;
@@ -39,8 +118,8 @@ const getBscScoreById = async (req, res, next) => {
       return res.status(404).json({ message: 'Score sheet not found' });
     }
 
-    // Dealers can only see their own
-    if (req.user.role === 'dealer' && score.dealerCode !== req.user.dealerCode) {
+    // Safely check req.user
+    if (req.user?.role === 'dealer' && score.dealerCode !== req.user.dealerCode) {
       return res.status(403).json({ message: 'Not authorized to view this score sheet' });
     }
 
@@ -61,7 +140,7 @@ const downloadScoreSheet = async (req, res, next) => {
       return res.status(404).json({ message: 'Score sheet not found' });
     }
 
-    if (req.user.role === 'dealer' && score.dealerCode !== req.user.dealerCode) {
+    if (req.user?.role === 'dealer' && score.dealerCode !== req.user.dealerCode) {
       return res.status(403).json({ message: 'Not authorized' });
     }
 
@@ -95,32 +174,14 @@ const downloadScoreSheet = async (req, res, next) => {
     ];
 
     const ws1 = XLSX.utils.aoa_to_sheet(summaryData);
-
-    // Style header
     ws1['A1'] = { v: summaryData[0][0], t: 's' };
-
-    // Set column widths
-    ws1['!cols'] = [
-      { wch: 35 }, { wch: 20 }, { wch: 35 }, { wch: 20 },
-    ];
-
+    ws1['!cols'] = [{ wch: 35 }, { wch: 20 }, { wch: 35 }, { wch: 20 }];
     XLSX.utils.book_append_sheet(wb, ws1, 'Summary');
 
     // ── Sheet 2: Detailed Score ───────────────────────────────────────────────
     const detailHeader = [
-      [
-        'Business Area',
-        'S.No.',
-        'Parameter',
-        'Access Condition Met',
-        'EARLY BIRD EVALUATION', '', '',
-        'FULL YEAR EVALUATION', '', '',
-      ],
-      [
-        '', '', '', '',
-        'Max Points', 'Min Points', 'Min Archived',
-        'Max Points', 'Min Points', 'Min Archived',
-      ],
+      ['Business Area', 'S.No.', 'Parameter', 'Access Condition Met', 'EARLY BIRD EVALUATION', '', '', 'FULL YEAR EVALUATION', '', ''],
+      ['', '', '', '', 'Max Points', 'Min Points', 'Min Archived', 'Max Points', 'Min Points', 'Min Archived'],
     ];
 
     const detailRows = [];
@@ -139,14 +200,8 @@ const downloadScoreSheet = async (req, res, next) => {
           param.fullYear.minArchived,
         ]);
       });
-      // Area total row
-      detailRows.push([
-        `${area.areaName} Total`,
-        '', '', '',
-        area.earlyBirdTotal, '', '',
-        area.fullYearTotal, '', '',
-      ]);
-      detailRows.push([]); // blank row between areas
+      detailRows.push([`${area.areaName} Total`, '', '', '', area.earlyBirdTotal, '', '', area.fullYearTotal, '', '']);
+      detailRows.push([]); 
     });
 
     const ws2 = XLSX.utils.aoa_to_sheet([...detailHeader, ...detailRows]);
@@ -155,10 +210,8 @@ const downloadScoreSheet = async (req, res, next) => {
       { wch: 12 }, { wch: 12 }, { wch: 14 },
       { wch: 12 }, { wch: 12 }, { wch: 14 },
     ];
-
     XLSX.utils.book_append_sheet(wb, ws2, 'Score Sheet');
 
-    // ── Send file ─────────────────────────────────────────────────────────────
     const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
     const filename = `BSC_${score.dealerCode}_${score.fiscalYear.replace(' ', '_')}_${score.month}.xlsx`;
 
@@ -175,29 +228,42 @@ const downloadScoreSheet = async (req, res, next) => {
 // @access  Private (msil, admin)
 const createBscScore = async (req, res, next) => {
   try {
+    const payload = normalizeBscPayload(req.body);
     const score = await BscScore.create({
-      ...req.body,
-      createdBy: req.user._id,
+      ...payload,
+      // Temporarily removed until auth is restored
+      // createdBy: req.user._id,
     });
     res.status(201).json({ success: true, data: score });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({ message: 'A scorecard already exists for this Dealer Code in this period.' });
+    }
+    console.log("MONGOOSE ERROR:", error.message);
     next(error);
   }
 };
 
-// @desc    Update BSC Score (MSIL / Admin)
-// @route   PUT /api/bsc/score/:id
-// @access  Private (msil, admin)
 const updateBscScore = async (req, res, next) => {
   try {
+    const payload = normalizeBscPayload(req.body);
+
     const score = await BscScore.findByIdAndUpdate(
       req.params.id,
-      { ...req.body, updatedBy: req.user._id },
+      { 
+        $set: payload,
+        // Temporarily removed until auth is restored
+        // updatedBy: req.user._id 
+      },
       { new: true, runValidators: true }
     );
+
     if (!score) return res.status(404).json({ message: 'Score not found' });
     res.json({ success: true, data: score });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({ message: 'A scorecard already exists for this Dealer Code in this period.' });
+    }
     next(error);
   }
 };

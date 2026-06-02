@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import marutiLogo from '../../assets/maruti-logoo.png';
 import './Navbar.css';
 
 const Navbar = () => {
@@ -14,18 +15,12 @@ const Navbar = () => {
 
   return (
     <nav className="navbar">
-      <div className="navbar__logo">
-        {/* Maruti Suzuki SVG logo placeholder */}
-        <svg className="navbar__logo-icon" viewBox="0 0 40 40" fill="none">
-          <path
-            d="M20 4L36 36H4L20 4Z"
-            fill="none"
-            stroke="#003087"
-            strokeWidth="2.5"
-          />
-          <path d="M14 28L20 16L26 28" stroke="#003087" strokeWidth="2" />
-        </svg>
-        <span className="navbar__logo-text">MARUTI SUZUKI</span>
+      <div className="navbar__brand" aria-label="Maruti Suzuki">
+        <img
+          className="navbar__brand-mark"
+          src={marutiLogo}
+          alt="Maruti Suzuki"
+        />
       </div>
 
       <div className="navbar__right">

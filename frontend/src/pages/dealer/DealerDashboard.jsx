@@ -4,138 +4,29 @@ import autoTable from 'jspdf-autotable';
 import { useAuth } from '../../context/AuthContext';
 import Navbar from '../../components/common/Navbar';
 import BscScoreSheet from '../../components/dealer/BscScoreSheet';
+import bscService from '../../services/bsc.service';
+import { buildVendorScorePdfRows } from '../../data/vendorBscData';
 import './DealerDashboard.css';
 
-const DEMO_BSC_SCORE = {
-  _id: 'demo-bsc-score',
-  dealerCode: '124',
-  dealerName: 'Sanvit Automotives',
-  region: 'South 2',
-  fiscalYear: 'FY 25-26',
-  month: "Dec'25",
-  earlyBird: {
-    provisionalScore: '601/960',
-    provisionalScorePercent: '62.6%',
-    qualification: 'N',
-    band: 'SILVER',
-  },
-  fullYear: {
-    provisionalScore: '601/960',
-    provisionalScorePercent: '62.6%',
-    qualification: 'N',
-    band: 'SILVER',
-  },
-  businessAreas: [
-    {
-      areaName: 'Sales Performance',
-      earlyBirdTotal: 100,
-      fullYearTotal: 100,
-      parameters: [
-        {
-          sNo: 1,
-          parameter: 'All Models Whole Sales Performance',
-          accessConditionMet: 'Y I N I N (Q1 I Q2 I Q3)',
-          earlyBird: { maxPoints: 100, minPoints: 0, minArchived: 50 },
-          fullYear: { maxPoints: 100, minPoints: 0, minArchived: 50 },
-        },
-        {
-          sNo: 1,
-          parameter: 'All Models Whole Sales Performance',
-          accessConditionMet: 'Y I N I N (Q1 I Q2 I Q3)',
-          earlyBird: { maxPoints: 100, minPoints: 0, minArchived: 50 },
-          fullYear: { maxPoints: 100, minPoints: 0, minArchived: 50 },
-        },
-        {
-          sNo: 1,
-          parameter: 'All Models Whole Sales Performance',
-          accessConditionMet: 'Y I N I N (Q1 I Q2 I Q3)',
-          earlyBird: { maxPoints: 100, minPoints: 0, minArchived: 50 },
-          fullYear: { maxPoints: 100, minPoints: 0, minArchived: 50 },
-        },
-      ],
-    },
-    {
-      areaName: 'Sales Quality Performance',
-      earlyBirdTotal: 100,
-      fullYearTotal: 100,
-      parameters: [
-        {
-          sNo: 1,
-          parameter: 'All Models Whole Sales Performance',
-          accessConditionMet: 'Y I N I N (Q1 I Q2 I Q3)',
-          earlyBird: { maxPoints: 100, minPoints: 0, minArchived: 50 },
-          fullYear: { maxPoints: 100, minPoints: 0, minArchived: 50 },
-        },
-        {
-          sNo: 1,
-          parameter: 'All Models Whole Sales Performance',
-          accessConditionMet: 'Y I N I N (Q1 I Q2 I Q3)',
-          earlyBird: { maxPoints: 100, minPoints: 0, minArchived: 50 },
-          fullYear: { maxPoints: 100, minPoints: 0, minArchived: 50 },
-        },
-      ],
-    },
-  ],
-};
+const DEFAULT_DEMO_MONTH = "Dec'25";
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const formatDemoMonth = (monthValue) => {
-  if (!monthValue) return DEMO_BSC_SCORE.month;
+  if (!monthValue) return DEFAULT_DEMO_MONTH;
 
   const [yearPart, monthPart] = monthValue.split('-');
   const monthIndex = Number(monthPart) - 1;
 
   if (!yearPart || Number.isNaN(monthIndex) || monthIndex < 0 || monthIndex > 11) {
-    return DEMO_BSC_SCORE.month;
+    return DEFAULT_DEMO_MONTH;
   }
 
   const shortYear = yearPart.slice(-2);
   return `${MONTH_NAMES[monthIndex]}'${shortYear}`;
 };
 
-const buildDemoScoreForMonth = (monthValue) => ({
-  ...DEMO_BSC_SCORE,
-  month: formatDemoMonth(monthValue),
-});
-
 const sanitizeFilePart = (value) => String(value || 'BSC').replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '');
-
-const formatDetailRows = (score) => {
-  const rows = [];
-
-  score.businessAreas?.forEach((area) => {
-    area.parameters?.forEach((param) => {
-      rows.push([
-        area.areaName,
-        String(param.sNo || ''),
-        param.parameter || '',
-        param.accessConditionMet || '',
-        String(param.earlyBird?.maxPoints ?? ''),
-        String(param.earlyBird?.minPoints ?? ''),
-        String(param.earlyBird?.minArchived ?? ''),
-        String(param.fullYear?.maxPoints ?? ''),
-        String(param.fullYear?.minPoints ?? ''),
-        String(param.fullYear?.minArchived ?? ''),
-      ]);
-    });
-
-    rows.push([
-      `${area.areaName} Total`,
-      '',
-      '',
-      '',
-      String(area.earlyBirdTotal ?? ''),
-      '',
-      '',
-      String(area.fullYearTotal ?? ''),
-      '',
-      '',
-    ]);
-  });
-
-  return rows;
-};
 
 const downloadScorePdf = (score) => {
   if (!score) return;
@@ -218,7 +109,7 @@ const downloadScorePdf = (score) => {
         'FY Min',
         'FY Archived',
       ]],
-      body: formatDetailRows(score),
+      body: buildVendorScorePdfRows(score),
       columnStyles: {
         0: { cellWidth: 120 },
         1: { cellWidth: 36, halign: 'center' },
@@ -273,9 +164,31 @@ const DealerDashboard = () => {
   const monthInputRef = useRef(null);
 
   useEffect(() => {
-    setSelectedScore(buildDemoScoreForMonth(month));
-    setLoading(false);
-  }, [month]);
+    const fetchDealerScore = async () => {
+      if (!user?.dealerCode) {
+        setSelectedScore(null);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const params = { dealerCode: user.dealerCode };
+        if (month) params.month = formatDemoMonth(month);
+
+        const response = await bscService.getScores(params);
+        const scores = response.data || [];
+        setSelectedScore(scores[0] || null);
+      } catch (error) {
+        console.error('Failed to fetch dealer BSC score', error);
+        setSelectedScore(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDealerScore();
+  }, [month, user?.dealerCode]);
 
   return (
     <div className="dealer-dashboard login-page">
@@ -397,15 +310,15 @@ const DealerDashboard = () => {
             <div className="bsc-dealer-fields">
               <div className="bsc-dealer-field">
                 <label>BSC Parent Dealer Code</label>
-                <input type="text" value={user?.dealerCode || ''} readOnly className="bsc-dealer-input" />
+                <input type="text" value={selectedScore?.dealerCode || user?.dealerCode || ''} readOnly className="bsc-dealer-input" />
               </div>
               <div className="bsc-dealer-field">
                 <label>Region</label>
-                <input type="text" value={user?.region || ''} readOnly className="bsc-dealer-input" />
+                <input type="text" value={selectedScore?.region || user?.region || ''} readOnly className="bsc-dealer-input" />
               </div>
               <div className="bsc-dealer-field">
                 <label>Dealer Name</label>
-                <input type="text" value={user?.dealerName || ''} readOnly className="bsc-dealer-input" />
+                <input type="text" value={selectedScore?.dealerName || user?.dealerName || ''} readOnly className="bsc-dealer-input" />
               </div>
             </div>
 

@@ -1,43 +1,93 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-// import authService from '../services/auth.service'; // 1. Comment this out for now
+import React, { createContext, useContext, useEffect, useState } from 'react';
 
 const AuthContext = createContext(null);
+const DEALER_USERS_KEY = 'bsc_demo_dealer_users';
+
+const getDealerUsers = () => {
+  try {
+    return JSON.parse(localStorage.getItem(DEALER_USERS_KEY) || '{}');
+  } catch (error) {
+    return {};
+  }
+};
+
+const saveDealerUsers = (users) => {
+  localStorage.setItem(DEALER_USERS_KEY, JSON.stringify(users));
+};
 
 export const AuthProvider = ({ children }) => {
-  // 2. Set a default fallback user just in case
-  const [user, setUser] = useState({ role: 'msil', name: 'Ayush Verma' }); 
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 3. Comment out the local storage check so it doesn't overwrite our fake user with null
-    /*
     const storedUser = localStorage.getItem('bsc_user');
-    const storedToken = localStorage.getItem('bsc_token');
-    if (storedUser && storedToken) {
+    if (storedUser) {
       setUser(JSON.parse(storedUser));
     }
-    */
     setLoading(false);
   }, []);
 
-  const login = async (username, password, role) => {
-    // 4. Bypass the actual backend call
-    // const data = await authService.login(username, password, role);
-    
-    // 5. Create a fake successful response matching whichever button you clicked
-    const fakeData = {
-      token: 'mock-jwt-token-12345',
-      user: {
-        role: role,
-        name: 'Ayush Verma'
-      }
-    };
+  const persistUser = (nextUser) => {
+    localStorage.setItem('bsc_token', `demo-token-${nextUser.role}`);
+    localStorage.setItem('bsc_user', JSON.stringify(nextUser));
+    setUser(nextUser);
+    return nextUser;
+  };
 
-    localStorage.setItem('bsc_token', fakeData.token);
-    localStorage.setItem('bsc_user', JSON.stringify(fakeData.user));
-    setUser(fakeData.user);
-    
-    return fakeData.user;
+  const login = async (username, password, requestedRole) => {
+    const cleanUsername = String(username || '').trim();
+    const cleanPassword = String(password || '').trim();
+
+    if (requestedRole === 'admin') {
+      if (cleanUsername !== 'admin' || cleanPassword !== 'admin') {
+        throw new Error('Use admin / admin for admin login.');
+      }
+      return persistUser({ role: 'admin', name: 'Admin', dealerName: 'Admin', dealerCode: 'ADMIN' });
+    }
+
+    if (requestedRole === 'msil') {
+      if (cleanUsername !== 'msil' || !['msil', '1234'].includes(cleanPassword)) {
+        throw new Error('Use msil / msil or msil / 1234 for MSIL login.');
+      }
+      return persistUser({ role: 'msil', name: 'MSIL User', dealerName: 'MSIL User', dealerCode: 'MSIL' });
+    }
+
+    const dealerUsers = getDealerUsers();
+    const dealerUser = dealerUsers[cleanUsername];
+
+    if (!dealerUser || dealerUser.password !== cleanPassword) {
+      throw new Error('Dealer login not found. Sign up with dealer code and password 1234 first.');
+    }
+
+    return persistUser({
+      role: 'dealer',
+      name: dealerUser.dealerName || `Dealer ${cleanUsername}`,
+      dealerName: dealerUser.dealerName || `Dealer ${cleanUsername}`,
+      dealerCode: cleanUsername,
+    });
+  };
+
+  const signupDealer = async (dealerCode, password = '1234') => {
+    const cleanDealerCode = String(dealerCode || '').trim();
+    const cleanPassword = String(password || '').trim() || '1234';
+
+    if (!cleanDealerCode) {
+      throw new Error('Enter dealer code as username.');
+    }
+
+    if (cleanPassword !== '1234') {
+      throw new Error('For demo, dealer password must be 1234.');
+    }
+
+    const dealerUsers = getDealerUsers();
+    dealerUsers[cleanDealerCode] = {
+      username: cleanDealerCode,
+      password: cleanPassword,
+      dealerName: `Dealer ${cleanDealerCode}`,
+    };
+    saveDealerUsers(dealerUsers);
+
+    return dealerUsers[cleanDealerCode];
   };
 
   const logout = () => {
@@ -47,7 +97,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, signupDealer, logout, loading }}>
       {!loading && children}
     </AuthContext.Provider>
   );
