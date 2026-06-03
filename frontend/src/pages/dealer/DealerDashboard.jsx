@@ -1,30 +1,28 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useAuth } from '../../context/AuthContext';
 import Navbar from '../../components/common/Navbar';
 import BscScoreSheet from '../../components/dealer/BscScoreSheet';
 import bscService from '../../services/bsc.service';
+import useSafeBackNavigation from '../../hooks/useSafeBackNavigation';
 import { buildVendorScorePdfRows } from '../../data/vendorBscData';
 import './DealerDashboard.css';
 
-const DEFAULT_DEMO_MONTH = "Dec'25";
-
-const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-const formatDemoMonth = (monthValue) => {
-  if (!monthValue) return DEFAULT_DEMO_MONTH;
-
-  const [yearPart, monthPart] = monthValue.split('-');
-  const monthIndex = Number(monthPart) - 1;
-
-  if (!yearPart || Number.isNaN(monthIndex) || monthIndex < 0 || monthIndex > 11) {
-    return DEFAULT_DEMO_MONTH;
-  }
-
-  const shortYear = yearPart.slice(-2);
-  return `${MONTH_NAMES[monthIndex]}'${shortYear}`;
-};
+const MONTH_OPTIONS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
 
 const sanitizeFilePart = (value) => String(value || 'BSC').replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '');
 
@@ -101,26 +99,24 @@ const downloadScorePdf = (score) => {
         'Business Area',
         'S.No.',
         'Parameter',
-        'Access Condition Met',
         'EB Max',
         'EB Min',
-        'EB Archived',
+        'EB Achieved',
         'FY Max',
         'FY Min',
-        'FY Archived',
+        'FY Achieved',
       ]],
       body: buildVendorScorePdfRows(score),
       columnStyles: {
-        0: { cellWidth: 120 },
+        0: { cellWidth: 130 },
         1: { cellWidth: 36, halign: 'center' },
-        2: { cellWidth: 170 },
-        3: { cellWidth: 130 },
-        4: { cellWidth: 42, halign: 'center' },
-        5: { cellWidth: 42, halign: 'center' },
-        6: { cellWidth: 46, halign: 'center' },
-        7: { cellWidth: 42, halign: 'center' },
-        8: { cellWidth: 42, halign: 'center' },
-        9: { cellWidth: 46, halign: 'center' },
+        2: { cellWidth: 240 },
+        3: { cellWidth: 48, halign: 'center' },
+        4: { cellWidth: 48, halign: 'center' },
+        5: { cellWidth: 58, halign: 'center' },
+        6: { cellWidth: 48, halign: 'center' },
+        7: { cellWidth: 48, halign: 'center' },
+        8: { cellWidth: 58, halign: 'center' },
       },
       didParseCell: (hookData) => {
         const { cell, row, column } = hookData;
@@ -157,11 +153,13 @@ const downloadScorePdf = (score) => {
 
 const DealerDashboard = () => {
   const { user } = useAuth();
+  const goBackSafely = useSafeBackNavigation('/dealer/dashboard');
   const [selectedScore, setSelectedScore] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('score'); // 'score' | 'review'
+  const [tabHistory, setTabHistory] = useState([]);
   const [month, setMonth] = useState('');
-  const monthInputRef = useRef(null);
+  const [year, setYear] = useState('');
 
   useEffect(() => {
     const fetchDealerScore = async () => {
@@ -174,7 +172,8 @@ const DealerDashboard = () => {
       try {
         setLoading(true);
         const params = { dealerCode: user.dealerCode };
-        if (month) params.month = formatDemoMonth(month);
+        if (month) params.month = month;
+        if (year) params.fiscalYear = year;
 
         const response = await bscService.getScores(params);
         const scores = response.data || [];
@@ -188,7 +187,28 @@ const DealerDashboard = () => {
     };
 
     fetchDealerScore();
-  }, [month, user?.dealerCode]);
+  }, [month, year, user?.dealerCode]);
+
+  const showDealerTab = (tab) => {
+    setActiveTab((currentTab) => {
+      if (currentTab !== tab) {
+        setTabHistory((history) => [...history, currentTab]);
+      }
+
+      return tab;
+    });
+  };
+
+  const handleSidebarBack = () => {
+    if (tabHistory.length) {
+      const previousTab = tabHistory[tabHistory.length - 1];
+      setTabHistory((history) => history.slice(0, -1));
+      setActiveTab(previousTab);
+      return;
+    }
+
+    goBackSafely();
+  };
 
   return (
     <div className="dealer-dashboard login-page">
@@ -198,7 +218,7 @@ const DealerDashboard = () => {
         <aside className="dealer-sidebar">
           <button
             className={`sidebar-btn ${activeTab === 'score' ? 'sidebar-btn--active' : ''}`}
-            onClick={() => setActiveTab('score')}
+            onClick={() => showDealerTab('score')}
             type="button"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -211,7 +231,7 @@ const DealerDashboard = () => {
 
           <button
             className={`sidebar-btn ${activeTab === 'nsc' ? 'sidebar-btn--active' : ''}`}
-            onClick={() => setActiveTab('nsc')}
+            onClick={() => showDealerTab('nsc')}
             type="button"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -220,7 +240,7 @@ const DealerDashboard = () => {
             <span>View NSC</span>
           </button>
 
-          <button className="dealer-sidebar__back" type="button">
+          <button className="dealer-sidebar__back" type="button" onClick={handleSidebarBack}>
             <span className="dealer-sidebar__back-icon">↩</span>
             <span>Back</span>
           </button>
@@ -237,43 +257,38 @@ const DealerDashboard = () => {
                 <div className="bsc-filters__field bsc-filters__field--month">
                   <label>Month</label>
                   <div className="bsc-filters__input-wrap">
-                    <input
-                      ref={monthInputRef}
-                      type="month"
+                    <select
                       value={month}
                       onChange={(e) => setMonth(e.target.value)}
-                      aria-label="Select month and year"
+                      aria-label="Select month"
                       className="bsc-filters__input"
-                    />
-                    <button
-                      type="button"
-                      className="bsc-filters__cal-button"
-                      onClick={() => {
-                        const input = monthInputRef.current;
-                        if (!input) return;
-
-                        if (typeof input.showPicker === 'function') {
-                          input.showPicker();
-                        } else {
-                          input.focus();
-                        }
-                      }}
-                      aria-label="Open month picker"
                     >
-                      <svg className="bsc-filters__cal-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="3" y="4" width="18" height="18" rx="2" />
-                      <line x1="16" y1="2" x2="16" y2="6" />
-                      <line x1="8" y1="2" x2="8" y2="6" />
-                      <line x1="3" y1="10" x2="21" y2="10" />
-                      </svg>
-                    </button>
+                      <option value="">Latest Month</option>
+                      {MONTH_OPTIONS.map((item) => (
+                        <option key={item} value={item}>{item}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="bsc-filters__field bsc-filters__field--month">
+                  <label>Year</label>
+                  <div className="bsc-filters__input-wrap">
+                    <input
+                      type="text"
+                      value={year}
+                      onChange={(e) => setYear(e.target.value)}
+                      aria-label="Select year"
+                      className="bsc-filters__input"
+                      placeholder="Latest Year"
+                    />
                   </div>
                 </div>
 
                 <button
                   className={`bsc-action-btn ${activeTab === 'score' ? 'bsc-action-btn--active' : ''}`}
                   onClick={() => {
-                    setActiveTab('score');
+                    showDealerTab('score');
                     downloadScorePdf(selectedScore);
                   }}
                   type="button"
@@ -290,7 +305,7 @@ const DealerDashboard = () => {
 
                 <button
                   className={`bsc-action-btn bsc-action-btn--review ${activeTab === 'review' ? 'bsc-action-btn--active' : ''}`}
-                  onClick={() => setActiveTab('review')}
+                  onClick={() => showDealerTab('review')}
                   type="button"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

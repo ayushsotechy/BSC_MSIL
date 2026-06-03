@@ -40,124 +40,60 @@ const toNumber = (value) => {
 
 
 const ROW_DEFINITIONS = {
+  'Sales & Marketing Performance': [
+    { sNo: '1', parameter: 'All Models Wholesales Performance', earlyBird: { maxPoints: 40, minPoints: 0, achieved: 0 }, fullYear: { maxPoints: 40, minPoints: 0, achieved: 0 } },
+    { sNo: '2', parameter: 'ARENA SUV Models Wholesales Performance', earlyBird: { maxPoints: 60, minPoints: 0, achieved: 0 }, fullYear: { maxPoints: 60, minPoints: 0, achieved: 0 } },
+    { sNo: '3', parameter: 'ARENA Models New Car VAHAN Registration', earlyBird: { maxPoints: 100, minPoints: 0, achieved: 0 }, fullYear: { maxPoints: 100, minPoints: 0, achieved: 0 } },
+    { sNo: '4', parameter: 'Maruti Suzuki Smart Finance', earlyBird: { maxPoints: 20, minPoints: 0, achieved: 0 }, fullYear: { maxPoints: 20, minPoints: 0, achieved: 0 } },
+    { sNo: '5', parameter: 'Maruti Suzuki Rewards Enrolment', earlyBird: { maxPoints: 10, minPoints: 0, achieved: 0 }, fullYear: { maxPoints: 10, minPoints: 0, achieved: 0 } },
+  ],
+  'Sales Quality Performance': [
+    { sNo: '6', parameter: 'Net Promoter Score - ARENA', earlyBird: { maxPoints: 40, minPoints: 0, achieved: 0 }, fullYear: { maxPoints: 40, minPoints: 0, achieved: 0 } },
+  ],
+  'Service Performance': [
+    { sNo: '7', parameter: 'Service to Sales Ratio', earlyBird: { maxPoints: 60, minPoints: -30, achieved: 0 }, fullYear: { maxPoints: 60, minPoints: -30, achieved: 0 } },
+    { sNo: '8', parameter: 'Extended Warranty Penetration', earlyBird: { maxPoints: 60, minPoints: -20, achieved: 0 }, fullYear: { maxPoints: 60, minPoints: -20, achieved: 0 } },
+    { sNo: '9', parameter: 'Customer Convenience Package Penetration', earlyBird: { maxPoints: 35, minPoints: -20, achieved: 0 }, fullYear: { maxPoints: 35, minPoints: -20, achieved: 0 } },
+  ],
+  'Service Quality Performance': [
+    { sNo: '10', parameter: 'Net Promoter Score - Service & Bodyshop', earlyBird: { maxPoints: 40, minPoints: -20, achieved: 0 }, fullYear: { maxPoints: 40, minPoints: -20, achieved: 0 } },
+    { sNo: '11', parameter: 'Customer Complaint Index - Service', earlyBird: { maxPoints: 30, minPoints: -10, achieved: 0 }, fullYear: { maxPoints: 30, minPoints: -10, achieved: 0 } },
+    { sNo: '12', parameter: 'Service Manpower Certification', earlyBird: { maxPoints: 30, minPoints: 0, achieved: 0 }, fullYear: { maxPoints: 30, minPoints: 0, achieved: 0 } },
+  ],
   'Parts and Accessories Performance': [
-    {
-      sNo: '13',
-      parameter: 'MSGP Performance',
-      accessConditionMet: 'NA',
-      earlyBird: { maxPoints: 60, minPoints: -10, achieved: 0 },
-      fullYear: { maxPoints: 60, minPoints: -10, achieved: 0 },
-    },
-    {
-      sNo: '14a',
-      parameter: 'MSGA Performance - Showroom Acc / Veh',
-      accessConditionMet: 'NA',
-      earlyBird: { maxPoints: 0, minPoints: 0, achieved: 0 },
-      fullYear: { maxPoints: 0, minPoints: 0, achieved: 0 },
-    },
-    {
-      sNo: '14b',
-      parameter: 'MSGA Performance - Tyre & Battery',
-      accessConditionMet: 'NA',
-      earlyBird: { maxPoints: 0, minPoints: 0, achieved: 0 },
-      fullYear: { maxPoints: 0, minPoints: 0, achieved: 0 },
-    },
-    {
-      sNo: '14c',
-      parameter: 'MSGA Performance - Smart EMI Penetration',
-      accessConditionMet: 'NA',
-      earlyBird: { maxPoints: 0, minPoints: 0, achieved: 0 },
-      fullYear: { maxPoints: 0, minPoints: 0, achieved: 0 },
-    },
-    {
-      sNo: '14d',
-      parameter: 'MSGA Performance - Seat Cover & Mat',
-      accessConditionMet: 'NA',
-      earlyBird: { maxPoints: 0, minPoints: 0, achieved: 0 },
-      fullYear: { maxPoints: 0, minPoints: 0, achieved: 0 },
-    },
+    { sNo: '13', parameter: 'MSGP Performance', earlyBird: { maxPoints: 65, minPoints: -15, achieved: 0 }, fullYear: { maxPoints: 65, minPoints: -15, achieved: 0 } },
+    { sNo: '14', parameter: 'MSGA Performance', earlyBird: { maxPoints: 85, minPoints: -10, achieved: 0 }, fullYear: { maxPoints: 85, minPoints: -10, achieved: 0 } },
   ],
   'True Value Performance': [
-    {
-      sNo: '14a',
-      parameter: 'TV Business Performance - Exchange Growth',
-      accessConditionMet: 'NA',
-      earlyBird: { maxPoints: 80, minPoints: 0, achieved: 0 },
-      fullYear: { maxPoints: 80, minPoints: 0, achieved: 0 },
-    },
-    {
-      sNo: '14b',
-      parameter: 'TV Business Performance - POC Sales Growth',
-      accessConditionMet: 'NA',
-      earlyBird: { maxPoints: 30, minPoints: 0, achieved: 0 },
-      fullYear: { maxPoints: 30, minPoints: 0, achieved: 0 },
-    },
-    {
-      sNo: '15',
-      parameter: 'Net Promoter Score - True Value',
-      accessConditionMet: 'N',
-      earlyBird: { maxPoints: 10, minPoints: 0, achieved: 0 },
-      fullYear: { maxPoints: 10, minPoints: 0, achieved: 0 },
-    },
-    {
-      sNo: '16',
-      parameter: 'POC Manpower Certification',
-      accessConditionMet: 'Y | Y | Y\n(Q1 | Q2 | Q3)',
-      earlyBird: { maxPoints: 0, minPoints: 0, achieved: 0 },
-      fullYear: { maxPoints: 0, minPoints: 0, achieved: 0 },
-    },
-    {
-      sNo: '17',
-      parameter: 'End of Life Vehicle Scrap Penetration (Bonus Parameter)',
-      accessConditionMet: 'NA',
-      earlyBird: { maxPoints: 0, minPoints: 0, achieved: 0 },
-      fullYear: { maxPoints: 25, minPoints: 0, achieved: 0 },
-    },
-  ],
-  'Dealer Financials': [
-    {
-      sNo: '18a',
-      parameter: 'Working Capital Diversion & inadequacy',
-      accessConditionMet: 'NA',
-      earlyBird: { maxPoints: 0, minPoints: -50, achieved: 0 },
-      fullYear: { maxPoints: 0, minPoints: -75, achieved: 0 },
-    },
-    {
-      sNo: '18b',
-      parameter: 'Dealer Financial Ratio',
-      accessConditionMet: 'NA',
-      earlyBird: { maxPoints: 0, minPoints: 0, achieved: 0 },
-      fullYear: { maxPoints: 0, minPoints: 0, achieved: 0 },
-    },
+    { sNo: '15a', parameter: 'TV Business Performance - Exchange Growth', earlyBird: { maxPoints: 60, minPoints: 0, achieved: 0 }, fullYear: { maxPoints: 60, minPoints: 0, achieved: 0 } },
+    { sNo: '15b', parameter: 'TV Business Performance - Purchase Cycle Management', earlyBird: { maxPoints: 40, minPoints: 0, achieved: 0 }, fullYear: { maxPoints: 40, minPoints: 0, achieved: 0 } },
+    { sNo: '16', parameter: 'Net Promoter Score - True Value', earlyBird: { maxPoints: 10, minPoints: 0, achieved: 0 }, fullYear: { maxPoints: 10, minPoints: 0, achieved: 0 } },
+    { sNo: '17', parameter: 'End of Life Vehicle Scrap Penetration (Bonus Parameter)', earlyBird: { maxPoints: 0, minPoints: 0, achieved: 0 }, fullYear: { maxPoints: 40, minPoints: 0, achieved: 0 }, excludeFromTotals: true },
   ],
   'Dealer Infrastructure': [
-    {
-      sNo: '19',
-      parameter: 'Upgradation of Old CI Outlets',
-      accessConditionMet: 'NA',
-      earlyBird: { maxPoints: 0, minPoints: -40, achieved: 0 },
-      fullYear: { maxPoints: 0, minPoints: -40, achieved: 0 },
-    },
-    {
-      sNo: '20',
-      parameter: 'Quarterly Maintenance of AFNA CI Main, E/R and New CTV Outlets',
-      accessConditionMet: 'NA',
-      earlyBird: { maxPoints: 20, minPoints: -40, achieved: 0 },
-      fullYear: { maxPoints: 20, minPoints: -40, achieved: 0 },
-    },
-    {
-      sNo: '21',
-      parameter: 'Adequate Insurance Coverage & Preventive Safety Audit',
-      accessConditionMet: 'NA',
-      earlyBird: { maxPoints: 0, minPoints: 0, achieved: 0 },
-      fullYear: { maxPoints: 0, minPoints: 0, achieved: 0 },
-    },
+    { sNo: '18', parameter: 'Charging Infrastructure - ARENA (Bonus Parameter)', earlyBird: { maxPoints: 0, minPoints: 0, achieved: 0 }, fullYear: { maxPoints: 30, minPoints: 0, achieved: 0 }, excludeFromTotals: true },
+    { sNo: '19', parameter: 'Maruti Suzuki Driving School', earlyBird: { maxPoints: 0, minPoints: -10, achieved: 0 }, fullYear: { maxPoints: 0, minPoints: -10, achieved: 0 } },
   ],
 };
 
 const normalizeKey = (value) => String(value || '').toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ').trim();
 
 const getParamKey = (param) => normalizeKey(`${param?.sNo || ''}-${param?.parameter || ''}`);
+
+const AREA_ALIASES = {
+  'Sales & Marketing Performance': ['Sales Performance', 'Sales and Marketing Performance'],
+};
+
+const PARAMETER_ALIASES = {
+  'All Models Wholesales Performance': ['All Models Wholesale Performance'],
+  'ARENA SUV Models Wholesales Performance': ['ARENA SUV Models Wholesale Performance'],
+  'Customer Convenience Package Penetration': ['Customer Convenience Package'],
+  'Customer Complaint Index - Service': ['Customer Complaint Index (Service)'],
+  'Service Manpower Certification': ['SSQS Certified Service Manpower'],
+  'TV Business Performance - Purchase Cycle Management': ['TV Business Performance - POC Sales Growth'],
+  'Charging Infrastructure - ARENA (Bonus Parameter)': ['Upgradation of Old CI Outlets'],
+  'Maruti Suzuki Driving School': ['Quarterly Maintenance of AFNA CI Main, E/R and New CTV Outlets'],
+};
 
 const mergeMetric = (baseMetric = {}, existingMetric = {}) => ({
   ...baseMetric,
@@ -169,38 +105,41 @@ const mergeParameter = (baseParam, existingParam) => ({
   ...(existingParam || {}),
   sNo: baseParam.sNo,
   parameter: baseParam.parameter,
-  accessConditionMet: existingParam?.accessConditionMet ?? baseParam.accessConditionMet,
+  accessConditionMet: existingParam?.accessConditionMet ?? baseParam.accessConditionMet ?? '',
+  excludeFromTotals: Boolean(baseParam.excludeFromTotals || existingParam?.excludeFromTotals),
   earlyBird: mergeMetric(baseParam.earlyBird, existingParam?.earlyBird),
   fullYear: mergeMetric(baseParam.fullYear, existingParam?.fullYear),
 });
 
 const normalizeBusinessAreas = (businessAreas = []) => {
-  const nextAreas = [...businessAreas];
-
-  Object.entries(ROW_DEFINITIONS).forEach(([areaName, requiredParams]) => {
-    const areaIndex = nextAreas.findIndex((area) => normalizeKey(area?.areaName) === normalizeKey(areaName));
-    const existingArea = areaIndex >= 0 ? nextAreas[areaIndex] : { areaName, parameters: [] };
+  return Object.entries(ROW_DEFINITIONS).map(([areaName, requiredParams]) => {
+    const possibleAreaNames = [areaName, ...(AREA_ALIASES[areaName] || [])];
+    const existingArea = businessAreas.find((area) =>
+      possibleAreaNames.some((name) => normalizeKey(area?.areaName) === normalizeKey(name))
+    ) || { areaName, parameters: [] };
     const existingParams = existingArea.parameters || [];
 
     const usedIndexes = new Set();
     const parameters = requiredParams.map((baseParam) => {
       let existingIndex = existingParams.findIndex((param, index) => {
         if (usedIndexes.has(index)) return false;
-        return getParamKey(param) === getParamKey(baseParam);
+        if (getParamKey(param) === getParamKey(baseParam)) return true;
+
+        const possibleParamNames = [baseParam.parameter, ...(PARAMETER_ALIASES[baseParam.parameter] || [])];
+        return possibleParamNames.some((name) => normalizeKey(param?.parameter) === normalizeKey(name));
       });
 
-      if (existingIndex === -1 && baseParam.sNo === '14a') {
+      if (existingIndex === -1 && baseParam.parameter === 'MSGA Performance') {
         existingIndex = existingParams.findIndex((param, index) => {
           if (usedIndexes.has(index)) return false;
-          return normalizeKey(param?.parameter) === normalizeKey('MSGA Performance');
+          return normalizeKey(param?.parameter).startsWith(normalizeKey('MSGA Performance'));
         });
       }
 
-      if (existingIndex === -1 && baseParam.sNo === '18a') {
+      if (existingIndex === -1 && baseParam.parameter === 'Charging Infrastructure - ARENA (Bonus Parameter)') {
         existingIndex = existingParams.findIndex((param, index) => {
           if (usedIndexes.has(index)) return false;
-          return normalizeKey(param?.parameter) === normalizeKey('Working Capital Diversion & inadequacy')
-            || String(param?.sNo || '') === '18';
+          return String(param?.sNo || '') === '18';
         });
       }
 
@@ -208,17 +147,12 @@ const normalizeBusinessAreas = (businessAreas = []) => {
       return mergeParameter(baseParam, existingIndex >= 0 ? existingParams[existingIndex] : undefined);
     });
 
-    const nextArea = {
+    return {
       ...existingArea,
       areaName,
       parameters,
     };
-
-    if (areaIndex >= 0) nextAreas[areaIndex] = nextArea;
-    else nextAreas.push(nextArea);
   });
-
-  return nextAreas;
 };
 
 const getTotalValue = (area, period, key) => {
@@ -233,7 +167,7 @@ const getTotalValue = (area, period, key) => {
 
   if (parameters.length) {
     return parameters.reduce(
-      (sum, param) => sum + toNumber(metricValue(param?.[period], key)),
+      (sum, param) => sum + (param?.excludeFromTotals ? 0 : toNumber(metricValue(param?.[period], key))),
       0,
     );
   }
@@ -485,7 +419,6 @@ const BscScoreSheet = ({ score, editable = false, onChange }) => {
             <th rowSpan="2" className="bg-primary">Business Area</th>
             <th rowSpan="2" className="bg-primary">S.No.</th>
             <th rowSpan="2" className="bg-primary">Parameter</th>
-            <th rowSpan="2" className="bg-primary">Access Condition Met</th>
             <th colSpan="3" className="bg-secondary">EARLY BIRD EVALUATION</th>
             <th colSpan="3" className="bg-secondary">FULL YEAR EVALUATION</th>
           </tr>
@@ -521,9 +454,6 @@ const BscScoreSheet = ({ score, editable = false, onChange }) => {
                     {/* STRICTLY NON-EDITABLE TEXT FIELDS (Wraps Text Naturally) */}
                     <td style={{ padding: '12px', lineHeight: '1.4' }}>
                       {toDisplayValue(param.parameter)}
-                    </td>
-                    <td className="center-text" style={{ whiteSpace: 'pre-wrap', padding: '8px' }}>
-                      {toDisplayValue(param.accessConditionMet)}
                     </td>
 
                     {/* Early Bird - Static Max/Min */}
@@ -573,7 +503,7 @@ const BscScoreSheet = ({ score, editable = false, onChange }) => {
                 ))}
 
                 <tr className="subtotal-row">
-                  <td colSpan="4" className="right-text">{area.areaName} Total</td>
+                  <td colSpan="3" className="right-text">{area.areaName} Total</td>
                   <td className="center-text bold-band">{areaEbMaxTotal}</td>
                   <td className="center-text bold-band">{areaEbMinTotal}</td>
                   <td className="center-text bold-band bg-secondary text-white">{areaEbAchievedTotal}</td>
@@ -586,7 +516,7 @@ const BscScoreSheet = ({ score, editable = false, onChange }) => {
           })}
 
           <tr className="grand-total-row">
-            <td colSpan="4" className="right-text">TOTAL</td>
+            <td colSpan="3" className="right-text">TOTAL</td>
             <td className="center-text bold-band">{earlyBirdSummary.maxPoints}</td>
             <td className="center-text bold-band">{earlyBirdSummary.minPoints}</td>
             <td className="center-text highlight-total" style={{ fontSize: '15px' }}>{earlyBirdSummary.achieved}</td>

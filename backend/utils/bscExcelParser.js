@@ -44,12 +44,35 @@ const getCell = (row, possibleNames) => {
 
   return partialKey ? row[partialKey] : undefined;
 };
+
+const metric = (maxPoints, minPoints, achieved = 0) => ({
+  maxPoints,
+  minPoints,
+  achieved,
+});
+
+const parameter = (sNo, text, earlyBird, fullYear, options = {}) => ({
+  sNo,
+  parameter: text,
+  accessConditionMet: '',
+  earlyBird,
+  fullYear,
+  excludeFromTotals: Boolean(options.excludeFromTotals),
+});
+
+const area = (areaName, parameters) => ({
+  areaName,
+  parameters,
+  earlyBirdTotal: 0,
+  fullYearTotal: 0,
+});
+
 const createBaseScore = ({ dealerCode, dealerName, region, fiscalYear, month }) => ({
   dealerCode,
   dealerName,
   region,
-  fiscalYear: fiscalYear || 'FY 25-26',
-  month: month || "Dec'25",
+  fiscalYear: fiscalYear || 'FY 26-27',
+  month: month || "Apr'26",
   provisionalType: 'provisional',
 
   earlyBird: {
@@ -67,279 +90,65 @@ const createBaseScore = ({ dealerCode, dealerName, region, fiscalYear, month }) 
   },
 
   businessAreas: [
-    {
-      areaName: 'Sales Performance',
-      parameters: [
-        {
-          sNo: 1,
-          parameter: 'All Models Wholesale Performance',
-          accessConditionMet: 'N I Y I N\n(Q1 I Q2 I Q3)',
-          earlyBird: { maxPoints: 100, minPoints: 0, achieved: 0 },
-          fullYear: { maxPoints: 100, minPoints: 0, achieved: 0 },
-        },
-        {
-          sNo: 2,
-          parameter: 'ARENA Models New Car VAHAN Registration',
-          accessConditionMet: 'Y',
-          earlyBird: { maxPoints: 100, minPoints: 0, achieved: 0 },
-          fullYear: { maxPoints: 100, minPoints: 0, achieved: 0 },
-        },
-        {
-          sNo: 3,
-          parameter: 'Maruti Suzuki Smart Finance',
-          accessConditionMet: 'N',
-          earlyBird: { maxPoints: 20, minPoints: 0, achieved: 0 },
-          fullYear: { maxPoints: 20, minPoints: 0, achieved: 0 },
-        },
-      ],
-      earlyBirdTotal: 0,
-      fullYearTotal: 0,
-    },
-    {
-      areaName: 'Sales Quality Performance',
-      parameters: [
-        {
-          sNo: 4,
-          parameter: 'Net Promoter Score - ARENA',
-          accessConditionMet: '7\n(No of Months Achieved)',
-          earlyBird: { maxPoints: 40, minPoints: 0, achieved: 0 },
-          fullYear: { maxPoints: 40, minPoints: 0, achieved: 0 },
-        },
-        {
-          sNo: 5,
-          parameter: 'ARENA Channel Sales Manpower Certification',
-          accessConditionMet: '3\n(No. of Qtrs Achieved)',
-          earlyBird: { maxPoints: 100, minPoints: 0, achieved: 0 },
-          fullYear: { maxPoints: 100, minPoints: 0, achieved: 0 },
-        },
-      ],
-      earlyBirdTotal: 0,
-      fullYearTotal: 0,
-    },
-    {
-      areaName: 'Service Performance',
-      parameters: [
-        {
-          sNo: 6,
-          parameter: 'Service to Sales Ratio',
-          accessConditionMet: 'Y',
-          earlyBird: { maxPoints: 60, minPoints: -30, achieved: 0 },
-          fullYear: { maxPoints: 60, minPoints: -30, achieved: 0 },
-        },
-        {
-          sNo: 7,
-          parameter: 'Extended Warranty Penetration',
-          accessConditionMet: 'Y',
-          earlyBird: { maxPoints: 50, minPoints: -30, achieved: 0 },
-          fullYear: { maxPoints: 50, minPoints: -30, achieved: 0 },
-        },
-        {
-          sNo: 8,
-          parameter: 'Customer Convenience Package',
-          accessConditionMet: 'Y',
-          earlyBird: { maxPoints: 30, minPoints: -20, achieved: 0 },
-          fullYear: { maxPoints: 30, minPoints: -20, achieved: 0 },
-        },
-      ],
-      earlyBirdTotal: 0,
-      fullYearTotal: 0,
-    },
-    {
-      areaName: 'Service Quality Performance',
-      parameters: [
-        {
-          sNo: 9,
-          parameter: 'Net Promoter Score - Service & Bodyshop',
-          accessConditionMet: 'Y',
-          earlyBird: { maxPoints: 50, minPoints: -20, achieved: 0 },
-          fullYear: { maxPoints: 50, minPoints: -20, achieved: 0 },
-        },
-        {
-          sNo: 10,
-          parameter: 'Customer Complaint Index (Service)',
-          accessConditionMet: 'NA',
-          earlyBird: { maxPoints: 40, minPoints: -20, achieved: 0 },
-          fullYear: { maxPoints: 40, minPoints: -20, achieved: 0 },
-        },
-        {
-          sNo: 11,
-          parameter: 'SSQS Certified Service Manpower',
-          accessConditionMet: 'Y',
-          earlyBird: { maxPoints: 40, minPoints: 0, achieved: 0 },
-          fullYear: { maxPoints: 40, minPoints: 0, achieved: 0 },
-        },
-        {
-          sNo: 12,
-          parameter: 'Service Infrastructure',
-          accessConditionMet: 'NA',
-          earlyBird: { maxPoints: 40, minPoints: 0, achieved: 0 },
-          fullYear: { maxPoints: 40, minPoints: 0, achieved: 0 },
-        },
-      ],
-      earlyBirdTotal: 0,
-      fullYearTotal: 0,
-    },
-    {
-      areaName: 'Parts and Accessories Performance',
-      parameters: [
-        {
-          sNo: 13,
-          parameter: 'MSGP Performance',
-          accessConditionMet: 'NA',
-          earlyBird: { maxPoints: 60, minPoints: -10, achieved: 0 },
-          fullYear: { maxPoints: 60, minPoints: -10, achieved: 0 },
-        },
-        {
-          sNo: '14a',
-          parameter: 'MSGA Performance - Showroom Acc / Veh',
-          accessConditionMet: 'NA',
-          earlyBird: { maxPoints: 0, minPoints: 0, achieved: 0 },
-          fullYear: { maxPoints: 0, minPoints: 0, achieved: 0 },
-        },
-        {
-          sNo: '14b',
-          parameter: 'MSGA Performance - Tyre & Battery',
-          accessConditionMet: 'NA',
-          earlyBird: { maxPoints: 0, minPoints: 0, achieved: 0 },
-          fullYear: { maxPoints: 0, minPoints: 0, achieved: 0 },
-        },
-        {
-          sNo: '14c',
-          parameter: 'MSGA Performance - Smart EMI Penetration',
-          accessConditionMet: 'NA',
-          earlyBird: { maxPoints: 0, minPoints: 0, achieved: 0 },
-          fullYear: { maxPoints: 0, minPoints: 0, achieved: 0 },
-        },
-        {
-          sNo: '14d',
-          parameter: 'MSGA Performance - Seat Cover & Mat',
-          accessConditionMet: 'NA',
-          earlyBird: { maxPoints: 0, minPoints: 0, achieved: 0 },
-          fullYear: { maxPoints: 0, minPoints: 0, achieved: 0 },
-        },
-      ],
-      earlyBirdTotal: 0,
-      fullYearTotal: 0,
-    },
-    {
-      areaName: 'True Value Performance',
-      parameters: [
-        {
-          sNo: '14a',
-          parameter: 'TV Business Performance - Exchange Growth',
-          accessConditionMet: 'NA',
-          earlyBird: { maxPoints: 80, minPoints: 0, achieved: 0 },
-          fullYear: { maxPoints: 80, minPoints: 0, achieved: 0 },
-        },
-        {
-          sNo: '14b',
-          parameter: 'TV Business Performance - POC Sales Growth',
-          accessConditionMet: 'NA',
-          earlyBird: { maxPoints: 30, minPoints: 0, achieved: 0 },
-          fullYear: { maxPoints: 30, minPoints: 0, achieved: 0 },
-        },
-        {
-          sNo: 15,
-          parameter: 'Net Promoter Score - True Value',
-          accessConditionMet: 'N',
-          earlyBird: { maxPoints: 10, minPoints: 0, achieved: 0 },
-          fullYear: { maxPoints: 10, minPoints: 0, achieved: 0 },
-        },
-        {
-          sNo: 16,
-          parameter: 'POC Manpower Certification',
-          accessConditionMet: 'Y | Y | Y\n(Q1 | Q2 | Q3)',
-          earlyBird: { maxPoints: 0, minPoints: 0, achieved: 0 },
-          fullYear: { maxPoints: 0, minPoints: 0, achieved: 0 },
-        },
-        {
-          sNo: 17,
-          parameter: 'End of Life Vehicle Scrap Penetration (Bonus Parameter)',
-          accessConditionMet: 'NA',
-          earlyBird: { maxPoints: 0, minPoints: 0, achieved: 0 },
-          fullYear: { maxPoints: 25, minPoints: 0, achieved: 0 },
-        },
-      ],
-      earlyBirdTotal: 0,
-      fullYearTotal: 0,
-    },
-    {
-      areaName: 'Dealer Financials',
-      parameters: [
-        {
-          sNo: '18a',
-          parameter: 'Working Capital Diversion & inadequacy',
-          accessConditionMet: 'NA',
-          earlyBird: { maxPoints: 0, minPoints: -50, achieved: 0 },
-          fullYear: { maxPoints: 0, minPoints: -75, achieved: 0 },
-        },
-        {
-          sNo: '18b',
-          parameter: 'Dealer Financial Ratio',
-          accessConditionMet: 'NA',
-          earlyBird: { maxPoints: 0, minPoints: 0, achieved: 0 },
-          fullYear: { maxPoints: 0, minPoints: 0, achieved: 0 },
-        },
-      ],
-      earlyBirdTotal: 0,
-      fullYearTotal: 0,
-    },
-    {
-      areaName: 'Dealer Infrastructure',
-      parameters: [
-        {
-          sNo: 19,
-          parameter: 'Upgradation of Old CI Outlets',
-          accessConditionMet: 'NA',
-          earlyBird: { maxPoints: 0, minPoints: -40, achieved: 0 },
-          fullYear: { maxPoints: 0, minPoints: -40, achieved: 0 },
-        },
-        {
-          sNo: 20,
-          parameter: 'Quarterly Maintenance of AFNA CI Main, E/R and New CTV Outlets',
-          accessConditionMet: 'NA',
-          earlyBird: { maxPoints: 20, minPoints: -40, achieved: 0 },
-          fullYear: { maxPoints: 20, minPoints: -40, achieved: 0 },
-        },
-        {
-          sNo: 21,
-          parameter: 'Adequate Insurance Coverage & Preventive Safety Audit',
-          accessConditionMet: 'NA',
-          earlyBird: { maxPoints: 0, minPoints: 0, achieved: 0 },
-          fullYear: { maxPoints: 0, minPoints: 0, achieved: 0 },
-        },
-      ],
-      earlyBirdTotal: 0,
-      fullYearTotal: 0,
-    },
+    area('Sales & Marketing Performance', [
+      parameter(1, 'All Models Wholesales Performance', metric(40, 0), metric(40, 0)),
+      parameter(2, 'ARENA SUV Models Wholesales Performance', metric(60, 0), metric(60, 0)),
+      parameter(3, 'ARENA Models New Car VAHAN Registration', metric(100, 0), metric(100, 0)),
+      parameter(4, 'Maruti Suzuki Smart Finance', metric(20, 0), metric(20, 0)),
+      parameter(5, 'Maruti Suzuki Rewards Enrolment', metric(10, 0), metric(10, 0)),
+    ]),
+    area('Sales Quality Performance', [
+      parameter(6, 'Net Promoter Score - ARENA', metric(40, 0), metric(40, 0)),
+    ]),
+    area('Service Performance', [
+      parameter(7, 'Service to Sales Ratio', metric(60, -30), metric(60, -30)),
+      parameter(8, 'Extended Warranty Penetration', metric(60, -20), metric(60, -20)),
+      parameter(9, 'Customer Convenience Package Penetration', metric(35, -20), metric(35, -20)),
+    ]),
+    area('Service Quality Performance', [
+      parameter(10, 'Net Promoter Score - Service & Bodyshop', metric(40, -20), metric(40, -20)),
+      parameter(11, 'Customer Complaint Index - Service', metric(30, -10), metric(30, -10)),
+      parameter(12, 'Service Manpower Certification', metric(30, 0), metric(30, 0)),
+    ]),
+    area('Parts and Accessories Performance', [
+      parameter(13, 'MSGP Performance', metric(65, -15), metric(65, -15)),
+      parameter(14, 'MSGA Performance', metric(85, -10), metric(85, -10)),
+    ]),
+    area('True Value Performance', [
+      parameter('15a', 'TV Business Performance - Exchange Growth', metric(60, 0), metric(60, 0)),
+      parameter('15b', 'TV Business Performance - Purchase Cycle Management', metric(40, 0), metric(40, 0)),
+      parameter(16, 'Net Promoter Score - True Value', metric(10, 0), metric(10, 0)),
+      parameter(17, 'End of Life Vehicle Scrap Penetration (Bonus Parameter)', metric(0, 0), metric(40, 0), { excludeFromTotals: true }),
+    ]),
+    area('Dealer Infrastructure', [
+      parameter(18, 'Charging Infrastructure - ARENA (Bonus Parameter)', metric(0, 0), metric(30, 0), { excludeFromTotals: true }),
+      parameter(19, 'Maruti Suzuki Driving School', metric(0, -10), metric(0, -10)),
+    ]),
   ],
 });
 
 const PARAMETER_COLUMNS = [
-  { area: 'Sales Performance', parameter: 'All Models Wholesale Performance', columns: ['All Models Wholesale Performance', 'All Models Wholsales Performance'] },
-  { area: 'Sales Performance', parameter: 'ARENA Models New Car VAHAN Registration', columns: ['New Car VAHAN Registration', 'VAHAN Registration'] },
-  { area: 'Sales Performance', parameter: 'Maruti Suzuki Smart Finance', columns: ['Maruti Suzuki Smart Finance', 'Smart Finance'] },
+  { area: 'Sales & Marketing Performance', parameter: 'All Models Wholesales Performance', columns: ['All Models Wholesales Performance', 'All Models Wholesale Performance', 'All Models Wholsales Performance'] },
+  { area: 'Sales & Marketing Performance', parameter: 'ARENA SUV Models Wholesales Performance', columns: ['ARENA SUV Models Wholesales Performance', 'ARENA SUV Models Wholesale Performance', 'SUV Models Wholesales Performance'] },
+  { area: 'Sales & Marketing Performance', parameter: 'ARENA Models New Car VAHAN Registration', columns: ['ARENA Models New Car VAHAN Registration', 'New Car VAHAN Registration', 'VAHAN Registration'] },
+  { area: 'Sales & Marketing Performance', parameter: 'Maruti Suzuki Smart Finance', columns: ['Maruti Suzuki Smart Finance', 'Smart Finance'] },
+  { area: 'Sales & Marketing Performance', parameter: 'Maruti Suzuki Rewards Enrolment', columns: ['Maruti Suzuki Rewards Enrolment', 'Maruti Suzuki Rewards Enrollment', 'Rewards Enrolment'] },
 
   { area: 'Sales Quality Performance', parameter: 'Net Promoter Score - ARENA', columns: ['NPS', 'Net Promoter Score', 'Net Promoter Score ARENA'] },
-  { area: 'Sales Quality Performance', parameter: 'ARENA Channel Sales Manpower Certification', columns: ['ARENA Channel Sales Manpower Certification'] },
 
   { area: 'Service Performance', parameter: 'Service to Sales Ratio', columns: ['Service to Sales Ratio'] },
   { area: 'Service Performance', parameter: 'Extended Warranty Penetration', columns: ['Extended Warranty Penetration'] },
-  { area: 'Service Performance', parameter: 'Customer Convenience Package', columns: ['Customer Convenience Package Penetration', 'Customer Convenience Package'] },
+  { area: 'Service Performance', parameter: 'Customer Convenience Package Penetration', columns: ['Customer Convenience Package Penetration', 'Customer Convenience Package'] },
 
   { area: 'Service Quality Performance', parameter: 'Net Promoter Score - Service & Bodyshop', columns: ['Net Promoter Score - Workshop & Bodyshop', 'Net Promoter Score - Service & Bodyshop'] },
-  { area: 'Service Quality Performance', parameter: 'Customer Complaint Index (Service)', columns: ['Customer Complaint Index - Service', 'Customer Complaint Index (Service)', 'Customer Complaint Index'] },
-  { area: 'Service Quality Performance', parameter: 'SSQS Certified Service Manpower', columns: ['SSQS Certified Service Manpower', 'Customer SSQs', 'Certified Service Manpower', 'Service Certified Manpower'] },
-  { area: 'Service Quality Performance', parameter: 'Service Infrastructure', columns: ['Service Infrastructure'] },
+  { area: 'Service Quality Performance', parameter: 'Customer Complaint Index - Service', columns: ['Customer Complaint Index - Service', 'Customer Complaint Index (Service)', 'Customer Complaint Index'] },
+  { area: 'Service Quality Performance', parameter: 'Service Manpower Certification', columns: ['Service Manpower Certification', 'SSQS Certified Service Manpower', 'Certified Service Manpower', 'Service Certified Manpower'] },
 
   { area: 'Parts and Accessories Performance', parameter: 'MSGP Performance', columns: ['MSGP Performance'] },
-  { area: 'Parts and Accessories Performance', parameter: 'MSGA Performance - Showroom Acc / Veh', columns: ['MSGA Performance - Showroom Acc / Veh', 'MSGA Showroom Acc/Veh', 'MSGA Showroom Acc Veh', 'Showroom Acc / Veh', 'Showroom Acc Veh'] },
-  { area: 'Parts and Accessories Performance', parameter: 'MSGA Performance - Tyre & Battery', columns: ['MSGA Performance - Tyre & Battery', 'MSGA Tyre & Battery', 'Tyre & Battery'] },
-  { area: 'Parts and Accessories Performance', parameter: 'MSGA Performance - Smart EMI Penetration', columns: ['MSGA Performance - Smart EMI Penetration', 'MSGA Smart EMI Penetration', 'Smart EMI Penetration'] },
-  { area: 'Parts and Accessories Performance', parameter: 'MSGA Performance - Seat Cover & Mat', columns: ['MSGA Performance - Seat Cover & Mat', 'MSGA Seat Cover & Mat', 'Seat Cover & Mat'] },
+  { area: 'Parts and Accessories Performance', parameter: 'MSGA Performance', columns: ['MSGA Performance'] },
 
-  { area: 'True Value Performance', parameter: 'TV Business Performance - Exchange Growth', columns: ['True Value Exch. Growth', 'Exchange Growth', 'Exch. Growth', 'TV Exchange Growth'] },
-  { area: 'True Value Performance', parameter: 'TV Business Performance - POC Sales Growth', columns: ['POC Sales Growth'] },
+  { area: 'True Value Performance', parameter: 'TV Business Performance - Exchange Growth', columns: ['TV Business Performance - Exchange Growth', 'True Value Exch. Growth', 'Exchange Growth', 'Exch. Growth', 'TV Exchange Growth'] },
+  { area: 'True Value Performance', parameter: 'TV Business Performance - Purchase Cycle Management', columns: ['TV Business Performance - Purchase Cycle Management', 'Purchase Cycle Management', 'POC Sales Growth'] },
 {
   area: 'True Value Performance',
   parameter: 'Net Promoter Score - True Value',
@@ -348,25 +157,20 @@ const PARAMETER_COLUMNS = [
     'NPS - True Value',
     'Net Promoter Score - True Value',
   ],
-},  { area: 'True Value Performance', parameter: 'POC Manpower Certification', columns: ['POC Manpower Certification', 'POC Manpower Certificati on'] },
+},
   { area: 'True Value Performance', parameter: 'End of Life Vehicle Scrap Penetration (Bonus Parameter)', columns: ['POC ELV Scrap Penetration', 'ELV Penetration', 'ELV Scrap Penetration'] },
 
-  { area: 'Dealer Financials', parameter: 'Working Capital Diversion & inadequacy', columns: ['Working Capital Diversion & Inadequacy', 'Working Capital Diversion and Inadequacy'] },
-  { area: 'Dealer Financials', parameter: 'Dealer Financial Ratio', columns: ['Dealer Financial Ratio'] },
-
-  { area: 'Dealer Infrastructure', parameter: 'Upgradation of Old CI Outlets', columns: ['ARENA & TV Infrastructure Upgradation', 'Infrastructure Upgradation', 'Upgradation'] },
-  { area: 'Dealer Infrastructure', parameter: 'Quarterly Maintenance of AFNA CI Main, E/R and New CTV Outlets', columns: ['ARENA & TV Infrastructure - Quarterly Maintenance', 'Quarterly Maintenance', 'ARENA TV Quarterly Maintenance'] },
-  { area: 'Dealer Infrastructure', parameter: 'Adequate Insurance Coverage & Preventive Safety Audit', columns: ['Adequate Insurance Coverage & Preventive Safety Audit', 'Adequate Insurance Coverage', 'Preventive Safety Audit'] },
+  { area: 'Dealer Infrastructure', parameter: 'Charging Infrastructure - ARENA (Bonus Parameter)', columns: ['Charging Infrastructure - ARENA', 'Charging Infrastructure'] },
+  { area: 'Dealer Infrastructure', parameter: 'Maruti Suzuki Driving School', columns: ['Maruti Suzuki Driving School', 'Driving School'] },
 ];
 
 const EARLY_BIRD_TOTAL_COLUMNS = [
-  { area: 'Sales Performance', columns: ['Sales Performance'] },
+  { area: 'Sales & Marketing Performance', columns: ['Sales & Marketing Performance', 'Sales and Marketing Performance', 'Sales Performance'] },
   { area: 'Sales Quality Performance', columns: ['Sales Quality Performance'] },
   { area: 'Service Performance', columns: ['Service Performance'] },
   { area: 'Service Quality Performance', columns: ['Service Quality Performance'] },
   { area: 'Parts and Accessories Performance', columns: ['Parts & Accessories Performance', 'Parts and Accessories Performance'] },
   { area: 'True Value Performance', columns: ['True Value Performance'] },
-  { area: 'Dealer Financials', columns: ['Dealer Financials'] },
   { area: 'Dealer Infrastructure', columns: ['Dealer Infrastructure'] },
 ];
 
@@ -415,8 +219,21 @@ const applyParameterValues = (score, row, period) => {
 
 const calculateAreaTotal = (area, period) =>
   (area.parameters || []).reduce((sum, param) => {
+    if (param?.excludeFromTotals) return sum;
     return sum + toNumber(param?.[period]?.achieved);
   }, 0);
+
+const calculateAreaMetricTotal = (area, period, key) =>
+  (area.parameters || []).reduce((sum, param) => {
+    if (param?.excludeFromTotals) return sum;
+    return sum + toNumber(param?.[period]?.[key]);
+  }, 0);
+
+const calculateGrandMetricTotal = (score, period, key) =>
+  score.businessAreas.reduce(
+    (sum, area) => sum + calculateAreaMetricTotal(area, period, key),
+    0
+  );
 
 const applyFullYearTotals = (score) => {
   score.businessAreas = score.businessAreas.map((area) => ({
@@ -428,11 +245,12 @@ const applyFullYearTotals = (score) => {
     (sum, area) => sum + toNumber(area.fullYearTotal),
     0
   );
+  const maxTotal = calculateGrandMetricTotal(score, 'fullYear', 'maxPoints');
 
   score.fullYear = {
     ...(score.fullYear || {}),
-    provisionalScore: String(grandTotal),
-    provisionalScorePercent: '',
+    provisionalScore: `${grandTotal}/${maxTotal}`,
+    provisionalScorePercent: maxTotal ? `${Math.round((grandTotal / maxTotal) * 100)}%` : '0%',
     qualification: 'N',
     band: 'NO BAND',
   };
@@ -449,14 +267,20 @@ const applyEarlyBirdTotals = (score, row) => {
     }
   });
 
+  score.businessAreas = score.businessAreas.map((area) => ({
+    ...area,
+    earlyBirdTotal: calculateAreaTotal(area, 'earlyBird'),
+  }));
+
   const grandTotal = score.businessAreas.reduce(
     (sum, area) => sum + toNumber(area.earlyBirdTotal),
     0
   );
+  const maxTotal = calculateGrandMetricTotal(score, 'earlyBird', 'maxPoints');
 
   score.earlyBird = {
     ...(score.earlyBird || {}),
-    provisionalScore: String(grandTotal),
+    provisionalScore: `${grandTotal}/${maxTotal}`,
     provisionalScorePercent: String(
       getCell(row, [
         'Full Year Provisional Score Achievement',

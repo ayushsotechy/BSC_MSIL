@@ -8,7 +8,7 @@ const LoginPage = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login, signupDealer } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleLogin = async (role) => {
@@ -23,23 +23,6 @@ const LoginPage = () => {
       navigate(`/${user.role}/dashboard`);
     } catch (err) {
       toast.error(err?.message || err?.response?.data?.message || 'Login failed. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDealerSignup = async () => {
-    if (!username.trim()) {
-      toast.error('Enter dealer code as username');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      await signupDealer(username, password || '1234');
-      toast.success('Dealer login created. Use the dealer login button now.');
-    } catch (err) {
-      toast.error(err?.message || 'Signup failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -242,15 +225,6 @@ const LoginPage = () => {
               disabled={loading}
             >
               {loading ? 'Logging in...' : 'Dealer Login'}
-            </button>
-
-            <button
-              className="login-card__btn login-card__btn--dealer"
-              onClick={handleDealerSignup}
-              disabled={loading}
-              type="button"
-            >
-              Create Dealer Login
             </button>
 
             <div className="login-card__or">

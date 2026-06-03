@@ -26,7 +26,7 @@ const metricTotal = (area, period) => {
 
   if (parameters.length) {
     return parameters.reduce(
-      (sum, param) => sum + toNumber(metricValue(param?.[period], 'achieved')),
+      (sum, param) => sum + (param?.excludeFromTotals ? 0 : toNumber(metricValue(param?.[period], 'achieved'))),
       0
     );
   }
@@ -40,46 +40,115 @@ const metricTotal = (area, period) => {
   return 0;
 };
 
-const normalizeBscPayload = (payload) => ({
-  dealerCode: String(payload?.dealerCode || '').trim(),
-  dealerName: String(payload?.dealerName || '').trim(),
-  region: String(payload?.region || '').trim(),
-  fiscalYear: String(payload?.fiscalYear || '').trim(),
-  month: String(payload?.month || '').trim(),
-  provisionalType: payload?.provisionalType || 'provisional',
-  earlyBird: {
-    provisionalScore: payload?.earlyBird?.provisionalScore || '',
-    provisionalScorePercent: payload?.earlyBird?.provisionalScorePercent || '',
-    qualification: payload?.earlyBird?.qualification || 'N',
-    band: payload?.earlyBird?.band || '',
-  },
-  fullYear: {
-    provisionalScore: payload?.fullYear?.provisionalScore || '',
-    provisionalScorePercent: payload?.fullYear?.provisionalScorePercent || '',
-    qualification: payload?.fullYear?.qualification || 'N',
-    band: payload?.fullYear?.band || '',
-  },
-  businessAreas: (payload?.businessAreas || []).map((area) => ({
-    areaName: area?.areaName || '',
-    earlyBirdTotal: metricTotal(area, 'earlyBird'),
-    fullYearTotal: metricTotal(area, 'fullYear'),
-    parameters: (area?.parameters || []).map((param) => ({
-      sNo: param?.sNo,
-      parameter: param?.parameter || param?.name || '',
-      accessConditionMet: param?.accessConditionMet || param?.condition || '',
-      earlyBird: normalizeMetric(param?.earlyBird || {
-        maxPoints: param?.ebMax,
-        minPoints: param?.ebMin,
-        achieved: param?.ebAchieved,
-      }),
-      fullYear: normalizeMetric(param?.fullYear || {
-        maxPoints: param?.fyMax,
-        minPoints: param?.fyMin,
-        achieved: param?.fyAchieved,
-      }),
-    })),
-  })),
+const getBand = (score) => score?.fullYear?.band || score?.earlyBird?.band || 'NO BAND';
+
+const getYearScore = (score) => score?.fullYear?.provisionalScore || score?.earlyBird?.provisionalScore || '';
+
+const parseFiscalYearNumber = (fiscalYear) => {
+  const text = String(fiscalYear || '').trim();
+  const fullYearMatch = text.match(/\b(20\d{2})\b/);
+  if (fullYearMatch) return Number(fullYearMatch[1]);
+
+  const fyMatch = text.match(/fy\s*(\d{2})\s*[-/]\s*(\d{2})/i);
+  if (fyMatch) return 2000 + Number(fyMatch[2]);
+
+  return null;
+};
+
+const getPreviousFiscalYearCandidates = (fiscalYear) => {
+  const yearNumber = parseFiscalYearNumber(fiscalYear);
+  if (!yearNumber) return [];
+
+  const previousYear = yearNumber - 1;
+  const previousShort = String(previousYear).slice(-2);
+  const currentShort = String(yearNumber).slice(-2);
+
+  return [
+    String(previousYear),
+    `FY ${previousShort}-${currentShort}`,
+    `FY${previousShort}-${currentShort}`,
+  ];
+};
+
+const findPreviousYearBand = async ({ dealerCode, fiscalYear, excludeId }) => {
+  const previousFiscalYears = getPreviousFiscalYearCandidates(fiscalYear);
+  if (!dealerCode || !previousFiscalYears.length) return 'N/A';
+
+  const query = {
+    dealerCode,
+    fiscalYear: { $in: previousFiscalYears },
+  };
+
+  if (excludeId) {
+    query._id = { $ne: excludeId };
+  }
+
+  const previousScore = await BscScore.findOne(query).sort({ createdAt: -1 });
+  return previousScore ? getBand(previousScore) : 'N/A';
+};
+
+const withScoreMetadata = async (payload, options = {}) => ({
+  ...payload,
+  previousYearBand: payload.previousYearBand && payload.previousYearBand !== 'N/A'
+    ? payload.previousYearBand
+    : await findPreviousYearBand({
+      dealerCode: payload.dealerCode,
+      fiscalYear: payload.fiscalYear,
+      excludeId: options.excludeId,
+    }),
+  currentYearBand: payload.currentYearBand || getBand(payload),
+  yearScore: payload.yearScore || getYearScore(payload),
 });
+
+const normalizeBscPayload = (payload) => {
+  const normalized = {
+    dealerCode: String(payload?.dealerCode || '').trim(),
+    dealerName: String(payload?.dealerName || '').trim(),
+    region: String(payload?.region || '').trim(),
+    fiscalYear: String(payload?.fiscalYear || '').trim(),
+    month: String(payload?.month || '').trim(),
+    provisionalType: payload?.provisionalType || 'provisional',
+    earlyBird: {
+      provisionalScore: payload?.earlyBird?.provisionalScore || '',
+      provisionalScorePercent: payload?.earlyBird?.provisionalScorePercent || '',
+      qualification: payload?.earlyBird?.qualification || 'N',
+      band: payload?.earlyBird?.band || '',
+    },
+    fullYear: {
+      provisionalScore: payload?.fullYear?.provisionalScore || '',
+      provisionalScorePercent: payload?.fullYear?.provisionalScorePercent || '',
+      qualification: payload?.fullYear?.qualification || 'N',
+      band: payload?.fullYear?.band || '',
+    },
+    businessAreas: (payload?.businessAreas || []).map((area) => ({
+      areaName: area?.areaName || '',
+      earlyBirdTotal: metricTotal(area, 'earlyBird'),
+      fullYearTotal: metricTotal(area, 'fullYear'),
+      parameters: (area?.parameters || []).map((param) => ({
+        sNo: param?.sNo,
+        parameter: param?.parameter || param?.name || '',
+        accessConditionMet: param?.accessConditionMet || param?.condition || '',
+        excludeFromTotals: Boolean(param?.excludeFromTotals),
+        earlyBird: normalizeMetric(param?.earlyBird || {
+          maxPoints: param?.ebMax,
+          minPoints: param?.ebMin,
+          achieved: param?.ebAchieved,
+        }),
+        fullYear: normalizeMetric(param?.fullYear || {
+          maxPoints: param?.fyMax,
+          minPoints: param?.fyMin,
+          achieved: param?.fyAchieved,
+        }),
+      })),
+    })),
+  };
+
+  normalized.previousYearBand = payload?.previousYearBand || '';
+  normalized.currentYearBand = payload?.currentYearBand || getBand(normalized);
+  normalized.yearScore = payload?.yearScore || getYearScore(normalized);
+
+  return normalized;
+};
 
 // @desc    Get BSC score for dealer
 // @route   GET /api/bsc/score
@@ -181,8 +250,8 @@ const downloadScoreSheet = async (req, res, next) => {
 
     // ── Sheet 2: Detailed Score ───────────────────────────────────────────────
     const detailHeader = [
-      ['Business Area', 'S.No.', 'Parameter', 'Access Condition Met', 'EARLY BIRD EVALUATION', '', '', 'FULL YEAR EVALUATION', '', ''],
-      ['', '', '', '', 'Max Points', 'Min Points', 'Min Archived', 'Max Points', 'Min Points', 'Min Archived'],
+      ['Business Area', 'S.No.', 'Parameter', 'EARLY BIRD EVALUATION', '', '', 'FULL YEAR EVALUATION', '', ''],
+      ['', '', '', 'Max Points', 'Min Points', 'Points Achieved', 'Max Points', 'Min Points', 'Points Achieved'],
     ];
 
     const detailRows = [];
@@ -192,22 +261,35 @@ const downloadScoreSheet = async (req, res, next) => {
           idx === 0 ? area.areaName : '',
           param.sNo,
           param.parameter,
-          param.accessConditionMet || '',
           param.earlyBird.maxPoints,
           param.earlyBird.minPoints,
-          param.earlyBird.minArchived,
+          param.earlyBird.achieved,
           param.fullYear.maxPoints,
           param.fullYear.minPoints,
-          param.fullYear.minArchived,
+          param.fullYear.achieved,
         ]);
       });
-      detailRows.push([`${area.areaName} Total`, '', '', '', area.earlyBirdTotal, '', '', area.fullYearTotal, '', '']);
+      const sumMetric = (period, key) => area.parameters.reduce(
+        (sum, param) => sum + (param.excludeFromTotals ? 0 : toNumber(metricValue(param?.[period], key))),
+        0
+      );
+      detailRows.push([
+        `${area.areaName} Total`,
+        '',
+        '',
+        sumMetric('earlyBird', 'maxPoints'),
+        sumMetric('earlyBird', 'minPoints'),
+        area.earlyBirdTotal,
+        sumMetric('fullYear', 'maxPoints'),
+        sumMetric('fullYear', 'minPoints'),
+        area.fullYearTotal,
+      ]);
       detailRows.push([]); 
     });
 
     const ws2 = XLSX.utils.aoa_to_sheet([...detailHeader, ...detailRows]);
     ws2['!cols'] = [
-      { wch: 25 }, { wch: 6 }, { wch: 30 }, { wch: 25 },
+      { wch: 25 }, { wch: 6 }, { wch: 45 },
       { wch: 12 }, { wch: 12 }, { wch: 14 },
       { wch: 12 }, { wch: 12 }, { wch: 14 },
     ];
@@ -229,7 +311,7 @@ const downloadScoreSheet = async (req, res, next) => {
 // @access  Private (msil, admin)
 const createBscScore = async (req, res, next) => {
   try {
-    const payload = normalizeBscPayload(req.body);
+    const payload = await withScoreMetadata(normalizeBscPayload(req.body));
     const score = await BscScore.create({
       ...payload,
       // Temporarily removed until auth is restored
@@ -247,7 +329,9 @@ const createBscScore = async (req, res, next) => {
 
 const updateBscScore = async (req, res, next) => {
   try {
-    const payload = normalizeBscPayload(req.body);
+    const payload = await withScoreMetadata(normalizeBscPayload(req.body), {
+      excludeId: req.params.id,
+    });
 
     const score = await BscScore.findByIdAndUpdate(
       req.params.id,
@@ -285,11 +369,15 @@ const uploadBscExcel = async (req, res, next) => {
       return res.status(400).json({ message: 'No valid dealer rows found in Excel.' });
     }
 
+    const enrichedScores = await Promise.all(
+      scores.map((score) => withScoreMetadata(normalizeBscPayload(score)))
+    );
+
     res.json({
       success: true,
       message: 'Excel parsed successfully.',
-      count: scores.length,
-      data: scores,
+      count: enrichedScores.length,
+      data: enrichedScores,
     });
   } catch (error) {
     next(error);
@@ -304,32 +392,32 @@ const bulkSaveBscScores = async (req, res, next) => {
     }
 
     const savedScores = [];
+    let skippedCount = 0;
 
     for (const rawScore of scores) {
-      const payload = normalizeBscPayload(rawScore);
+      const payload = await withScoreMetadata(normalizeBscPayload(rawScore));
 
-      const savedScore = await BscScore.findOneAndUpdate(
-        {
-          dealerCode: payload.dealerCode,
-          fiscalYear: payload.fiscalYear,
-          month: payload.month,
-        },
-        { $set: payload },
-        {
-          upsert: true,
-          new: true,
-          runValidators: true,
-          setDefaultsOnInsert: true,
-        }
-      );
+      const existingScore = await BscScore.findOne({
+        dealerCode: payload.dealerCode,
+        fiscalYear: payload.fiscalYear,
+        month: payload.month,
+      });
+
+      if (existingScore) {
+        skippedCount += 1;
+        continue;
+      }
+
+      const savedScore = await BscScore.create(payload);
 
       savedScores.push(savedScore);
     }
 
     res.json({
       success: true,
-      message: `${savedScores.length} scorecards saved successfully.`,
+      message: `${savedScores.length} scorecards saved successfully. ${skippedCount} existing scorecards skipped.`,
       count: savedScores.length,
+      skippedCount,
       data: savedScores,
     });
   } catch (error) {

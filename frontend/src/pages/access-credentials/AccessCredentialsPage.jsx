@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import Navbar from '../../components/common/Navbar';
+import useSafeBackNavigation from '../../hooks/useSafeBackNavigation';
 import '../../pages/dealer/DealerDashboard.css';
 import './AccessCredentialsPage.css';
 
@@ -14,7 +14,7 @@ const INITIAL_ROWS = [
 ];
 
 const AccessCredentialsPage = ({ dashboardPath = '/msil/dashboard' }) => {
-  const navigate = useNavigate();
+  const goBackSafely = useSafeBackNavigation(dashboardPath);
   const ZONES = ['South', 'West', 'North', 'East', 'Central'];
   const REGIONS = ['South 1', 'South 2', 'West 1', 'North 3', 'East 2', 'Central'];
 
@@ -41,22 +41,13 @@ const AccessCredentialsPage = ({ dashboardPath = '/msil/dashboard' }) => {
     });
   };
 
-  const handleBack = () => {
-    if (window.history.length > 1) {
-      navigate(-1);
-      return;
-    }
-
-    navigate(dashboardPath);
-  };
-
   return (
     <div className="access-credentials-dashboard login-page">
       <Navbar />
 
       <div className="access-credentials-shell">
         <aside className="access-credentials-sidebar">
-          <button className="access-credentials-sidebar__btn" type="button" onClick={handleBack}>
+          <button className="access-credentials-sidebar__btn" type="button" onClick={goBackSafely}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M10 8a4 4 0 1 1 0 8h-2a4 4 0 1 1 0-8z" />
               <path d="M14 8h2a4 4 0 0 1 0 8h-2" />
@@ -64,7 +55,7 @@ const AccessCredentialsPage = ({ dashboardPath = '/msil/dashboard' }) => {
             <span>View BSC</span>
           </button>
 
-          <button className="access-credentials-sidebar__btn" type="button" onClick={handleBack}>
+          <button className="access-credentials-sidebar__btn" type="button" onClick={goBackSafely}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M4 18h16" />
               <path d="M7 14l3-10 4 14 3-8 2 4" />
@@ -82,7 +73,7 @@ const AccessCredentialsPage = ({ dashboardPath = '/msil/dashboard' }) => {
             <span>Access Credentials</span>
           </button>
 
-          <button className="access-credentials-sidebar__back" type="button" onClick={handleBack}>
+          <button className="access-credentials-sidebar__back" type="button" onClick={goBackSafely}>
             <span className="access-credentials-sidebar__back-icon">↩</span>
             <span>Back</span>
           </button>

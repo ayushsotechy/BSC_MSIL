@@ -1,7 +1,10 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import accessControlService from '../services/accessControl.service';
 
 const AuthContext = createContext(null);
 const DEALER_USERS_KEY = 'bsc_demo_dealer_users';
+const ACCESS_DEALER_CREDENTIALS_KEY = 'bsc_access_dealer_credentials';
+const ACCESS_MSIL_PERSONS_KEY = 'bsc_access_msil_persons';
 
 const getDealerUsers = () => {
   try {
@@ -13,6 +16,15 @@ const getDealerUsers = () => {
 
 const saveDealerUsers = (users) => {
   localStorage.setItem(DEALER_USERS_KEY, JSON.stringify(users));
+};
+
+const getStoredList = (key, fallback = []) => {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || 'null');
+    return Array.isArray(value) ? value : fallback;
+  } catch (error) {
+    return fallback;
+  }
 };
 
 export const AuthProvider = ({ children }) => {
@@ -46,17 +58,98 @@ export const AuthProvider = ({ children }) => {
     }
 
     if (requestedRole === 'msil') {
-      if (cleanUsername !== 'msil' || !['msil', '1234'].includes(cleanPassword)) {
-        throw new Error('Use msil / msil or msil / 1234 for MSIL login.');
+      try {
+        const response = await accessControlService.login({
+          username: cleanUsername,
+          password: cleanPassword,
+          role: 'msil',
+        });
+
+        if (response.user) {
+          return persistUser(response.user);
+        }
+      } catch (error) {
+        if (error.response?.status !== 401 && error.response?.status !== 400) {
+          console.error('MSIL backend login failed:', error);
+        }
       }
-      return persistUser({ role: 'msil', name: 'MSIL User', dealerName: 'MSIL User', dealerCode: 'MSIL' });
+
+      const msilPersons = getStoredList(ACCESS_MSIL_PERSONS_KEY);
+      const msilUser = msilPersons.find((person) => {
+        const loginIds = [
+          person.name,
+          person.mailId,
+          person.email,
+        ].map((value) => String(value || '').trim().toLowerCase());
+
+        return loginIds.includes(cleanUsername.toLowerCase());
+      });
+
+      if (msilUser) {
+        const expectedPassword = String(msilUser.password || '1234').trim();
+        if (cleanPassword !== expectedPassword) {
+          throw new Error('Invalid MSIL password.');
+        }
+
+        return persistUser({
+          role: 'msil',
+          name: msilUser.name || cleanUsername,
+          dealerName: msilUser.name || cleanUsername,
+          dealerCode: msilUser.id || msilUser.code || 'MSIL',
+          mailId: msilUser.mailId || '',
+        });
+      }
+
+      throw new Error('MSIL login not found. Ask admin to create MSIL access credentials.');
+    }
+
+    try {
+      const response = await accessControlService.login({
+        username: cleanUsername,
+        password: cleanPassword,
+        role: 'dealer',
+      });
+
+      if (response.user) {
+        return persistUser(response.user);
+      }
+    } catch (error) {
+      if (error.response?.status !== 401 && error.response?.status !== 400) {
+        console.error('Dealer backend login failed:', error);
+      }
+    }
+
+    const accessDealer = getStoredList(ACCESS_DEALER_CREDENTIALS_KEY).find((dealer) => {
+      const loginIds = [
+        dealer.dealerCode,
+        dealer.mailId,
+      ].map((value) => String(value || '').trim().toLowerCase());
+
+      return loginIds.includes(cleanUsername.toLowerCase());
+    });
+
+    if (accessDealer) {
+      if (String(accessDealer.password || '').trim() !== cleanPassword) {
+        throw new Error('Invalid dealer password.');
+      }
+
+      return persistUser({
+        role: 'dealer',
+        name: accessDealer.dealerName || accessDealer.dealerCode,
+        dealerName: accessDealer.dealerName || accessDealer.dealerCode,
+        dealerCode: accessDealer.dealerCode,
+        mailId: accessDealer.mailId,
+        zone: accessDealer.zone,
+        region: accessDealer.region,
+        msilPersons: accessDealer.msilPersons || [],
+      });
     }
 
     const dealerUsers = getDealerUsers();
     const dealerUser = dealerUsers[cleanUsername];
 
     if (!dealerUser || dealerUser.password !== cleanPassword) {
-      throw new Error('Dealer login not found. Sign up with dealer code and password 1234 first.');
+      throw new Error('Dealer login not found. Ask admin to create access credentials.');
     }
 
     return persistUser({
@@ -73,10 +166,6 @@ export const AuthProvider = ({ children }) => {
 
     if (!cleanDealerCode) {
       throw new Error('Enter dealer code as username.');
-    }
-
-    if (cleanPassword !== '1234') {
-      throw new Error('For demo, dealer password must be 1234.');
     }
 
     const dealerUsers = getDealerUsers();

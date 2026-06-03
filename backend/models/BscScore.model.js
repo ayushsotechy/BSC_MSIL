@@ -4,6 +4,7 @@ const bscParameterSchema = new mongoose.Schema({
   sNo: { type: mongoose.Schema.Types.Mixed, required: true }, // Changed to Mixed to support '14a', '14b'
   parameter: { type: String, required: true },
   accessConditionMet: { type: String }, 
+  excludeFromTotals: { type: Boolean, default: false },
   earlyBird: {
     maxPoints: { type: Number, default: 0 },
     minPoints: { type: Number, default: 0 },
@@ -36,6 +37,9 @@ const bscScoreSchema = new mongoose.Schema(
     region: { type: String, required: true },     // Editable
     fiscalYear: { type: String, required: true }, 
     month: { type: String, required: true }, 
+    previousYearBand: { type: String, default: 'N/A' },
+    currentYearBand: { type: String, default: '' },
+    yearScore: { type: String, default: '' },
     provisionalType: {
       type: String,
       enum: ['provisional', 'final'],

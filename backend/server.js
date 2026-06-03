@@ -11,6 +11,7 @@ const dealerRoutes = require('./routes/dealer.routes');
 const msilRoutes = require('./routes/msil.routes');
 const adminRoutes = require('./routes/admin.routes');
 const bscRoutes = require('./routes/bsc.routes');
+const accessControlRoutes = require('./routes/access-control.routes');
 
 const { errorHandler } = require('./middleware/error.middleware');
 
@@ -63,6 +64,7 @@ app.use('/api/dealer', dealerRoutes);
 app.use('/api/msil', msilRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/bsc', bscRoutes);
+app.use('/api/access-control', accessControlRoutes);
 
 // ─── Health Check ────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
