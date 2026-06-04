@@ -2,6 +2,7 @@ import React from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import marutiLogo from '../../assets/maruti-logoo.png';
+import poweredByDeLogo from '../../assets/Powered By DE black.png';
 import './Navbar.css';
 
 const Navbar = () => {
@@ -10,7 +11,8 @@ const Navbar = () => {
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    sessionStorage.removeItem('bsc_safe_route_history');
+    navigate('/login', { replace: true });
   };
 
   return (
@@ -24,8 +26,7 @@ const Navbar = () => {
       </div>
 
       <div className="navbar__right">
-        <span className="navbar__powered">Powered by DE</span>
-        <span className="navbar__powered-icon">»</span>
+        <img className="navbar__powered-logo" src={poweredByDeLogo} alt="Powered by DE" />
 
         <button className="navbar__icon-btn" title="Notifications">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

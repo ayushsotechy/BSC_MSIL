@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState, useEffect } from 'react';
+import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import Navbar from '../../components/common/Navbar';
 import BscScoreSheet from '../../components/dealer/BscScoreSheet';
 import accessControlService from '../../services/accessControl.service';
@@ -27,6 +27,8 @@ const MONTH_OPTIONS = [
 
 const DEFAULT_UPLOAD_YEAR = String(new Date().getFullYear());
 const DEFAULT_UPLOAD_MONTH = MONTH_OPTIONS[new Date().getMonth()];
+const DEFAULT_TABLE_PAGE_SIZE = 10;
+const DEFAULT_COMPACT_PAGE_SIZE = 6;
 const ACCESS_ZONES_KEY = 'bsc_access_zones';
 const ACCESS_REGIONS_KEY = 'bsc_access_regions';
 const ACCESS_MSIL_PERSONS_KEY = 'bsc_access_msil_persons';
@@ -82,6 +84,65 @@ const writeStoredList = (key, value) => {
 };
 
 const createId = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+const getPageCount = (totalItems, pageSize) => Math.max(1, Math.ceil((totalItems || 0) / pageSize));
+
+const paginateItems = (items, page, pageSize) => {
+  const startIndex = (page - 1) * pageSize;
+  return (items || []).slice(startIndex, startIndex + pageSize);
+};
+
+const PaginationControls = ({ totalItems, page, pageSize, onPageChange, label = 'list' }) => {
+  const pageCount = getPageCount(totalItems, pageSize);
+  if ((totalItems || 0) <= pageSize) return null;
+
+  const startItem = (page - 1) * pageSize + 1;
+  const endItem = Math.min(page * pageSize, totalItems);
+  const pageNumbers = Array.from({ length: pageCount }, (_, index) => index + 1)
+    .filter((pageNumber) =>
+      pageNumber === 1
+      || pageNumber === pageCount
+      || Math.abs(pageNumber - page) <= 2
+    );
+
+  return (
+    <div className="admin-pagination">
+      <span className="admin-pagination__summary">
+        Showing {startItem}-{endItem} of {totalItems} {label}
+      </span>
+      <div className="admin-pagination__pages">
+        <button
+          type="button"
+          onClick={() => onPageChange(Math.max(1, page - 1))}
+          disabled={page <= 1}
+        >
+          Prev
+        </button>
+        {pageNumbers.map((pageNumber, index) => (
+          <React.Fragment key={pageNumber}>
+            {index > 0 && pageNumber - pageNumbers[index - 1] > 1 && (
+              <span className="admin-pagination__ellipsis">...</span>
+            )}
+            <button
+              type="button"
+              className={pageNumber === page ? 'admin-pagination__page--active' : ''}
+              onClick={() => onPageChange(pageNumber)}
+            >
+              {pageNumber}
+            </button>
+          </React.Fragment>
+        ))}
+        <button
+          type="button"
+          onClick={() => onPageChange(Math.min(pageCount, page + 1))}
+          disabled={page >= pageCount}
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
+};
 
 const normalizeAccessControlData = (data = {}) => ({
   zones: Array.isArray(data.zones) && data.zones.length
@@ -270,6 +331,28 @@ const getScoreCredential = (score, dealerCredentials) =>
     String(credential.dealerCode || '').trim().toLowerCase() === String(score?.dealerCode || '').trim().toLowerCase()
   );
 
+const getMonthRank = (monthName) => {
+  const monthIndex = MONTH_OPTIONS.findIndex((item) =>
+    item.toLowerCase() === String(monthName || '').trim().toLowerCase()
+  );
+
+  return monthIndex >= 0 ? monthIndex : -1;
+};
+
+const getLatestMonthFromRows = (rows = []) => {
+  const rowWithLatestMonth = rows
+    .filter((row) => row?.month)
+    .sort((a, b) => {
+      const yearA = parseFiscalYearNumber(a?.fiscalYear) || 0;
+      const yearB = parseFiscalYearNumber(b?.fiscalYear) || 0;
+      if (yearA !== yearB) return yearB - yearA;
+
+      return getMonthRank(b?.month) - getMonthRank(a?.month);
+    })[0];
+
+  return rowWithLatestMonth?.month || '';
+};
+
 const AdminDashboard = ({ readOnly = false }) => {
   const { user } = useAuth();
   const fallbackDashboardPath = readOnly ? '/msil/dashboard' : '/admin/dashboard';
@@ -280,8 +363,12 @@ const AdminDashboard = ({ readOnly = false }) => {
   const [region, setRegion] = useState('');
   const [dealer, setDealer] = useState('');
   const [month, setMonth] = useState('');
+  const [selectedMonths, setSelectedMonths] = useState([]);
+  const [isMonthDropdownOpen, setIsMonthDropdownOpen] = useState(false);
+  const [hasInitializedMsilMonth, setHasInitializedMsilMonth] = useState(false);
   const [year, setYear] = useState('');
   const excelInputRef = useRef(null);
+  const monthDropdownRef = useRef(null);
   
   const [selectedDealer, setSelectedDealer] = useState(null);
   const [draftScore, setDraftScore] = useState(null);
@@ -307,21 +394,40 @@ const AdminDashboard = ({ readOnly = false }) => {
   const [isEditingRegions, setIsEditingRegions] = useState(false);
   const [editingMsilId, setEditingMsilId] = useState(null);
   const [editingDealerId, setEditingDealerId] = useState(null);
+  const [bscPage, setBscPage] = useState(1);
+  const [nscPage, setNscPage] = useState(1);
+  const [excelPreviewPage, setExcelPreviewPage] = useState(1);
+  const [dealerCredentialPage, setDealerCredentialPage] = useState(1);
+  const [zonePage, setZonePage] = useState(1);
+  const [regionPage, setRegionPage] = useState(1);
+  const [msilPersonPage, setMsilPersonPage] = useState(1);
 
   const isMsilReadOnly = readOnly && user?.role === 'msil';
-  const msilUserIds = [user?.name, user?.mailId, user?.dealerCode]
-    .map((value) => String(value || '').trim().toLowerCase())
-    .filter(Boolean);
-  const msilDealerCredentials = isMsilReadOnly
-    ? dealerCredentials.filter((credential) =>
-      (credential.msilPersons || []).some((personId) =>
-        msilUserIds.includes(String(personId || '').trim().toLowerCase())
+  const msilUserIds = useMemo(() => (
+    [user?.name, user?.mailId, user?.dealerCode]
+      .map((value) => String(value || '').trim().toLowerCase())
+      .filter(Boolean)
+  ), [user?.dealerCode, user?.mailId, user?.name]);
+  const msilDealerCredentials = useMemo(() => (
+    isMsilReadOnly
+      ? dealerCredentials.filter((credential) =>
+        (credential.msilPersons || []).some((personId) =>
+          msilUserIds.includes(String(personId || '').trim().toLowerCase())
+        )
       )
-    )
-    : dealerCredentials;
-  const allowedMsilDealerCodes = msilDealerCredentials
-    .map((credential) => String(credential.dealerCode || '').trim().toLowerCase())
-    .filter(Boolean);
+      : dealerCredentials
+  ), [dealerCredentials, isMsilReadOnly, msilUserIds]);
+  const allowedMsilDealerCodes = useMemo(() => (
+    msilDealerCredentials
+      .map((credential) => String(credential.dealerCode || '').trim().toLowerCase())
+      .filter(Boolean)
+  ), [msilDealerCredentials]);
+  const msilVisibleRowsForDefaults = useMemo(() => (
+    isMsilReadOnly
+      ? tableRows.filter((row) => allowedMsilDealerCodes.includes(String(row.dealerCode || '').trim().toLowerCase()))
+      : []
+  ), [allowedMsilDealerCodes, isMsilReadOnly, tableRows]);
+  const selectedMonthFilters = isMsilReadOnly ? selectedMonths : (month ? [month] : []);
   const zoneOptions = isMsilReadOnly
     ? zones.filter((item) => msilDealerCredentials.some((credential) => credential.zone === item))
     : zones;
@@ -344,7 +450,9 @@ const AdminDashboard = ({ readOnly = false }) => {
       (!zone || String(rowCredential?.zone || '').toLowerCase() === zone.toLowerCase()) &&
       (!region || String(rowCredential?.region || row.region || '').toLowerCase().includes(region.toLowerCase())) &&
       (!dealer || dealerText.includes(dealer.toLowerCase())) &&
-      (!month || String(row.month || '').toLowerCase() === month.toLowerCase()) &&
+      (!selectedMonthFilters.length || selectedMonthFilters.some((selectedMonth) =>
+        String(row.month || '').toLowerCase() === String(selectedMonth || '').toLowerCase()
+      )) &&
       (!year || String(row.fiscalYear || '').toLowerCase().includes(year.toLowerCase()))
     );
   });
@@ -442,6 +550,33 @@ const AdminDashboard = ({ readOnly = false }) => {
       setRegion('');
     }
   }, [isMsilReadOnly, zone, region, zoneOptions, regionOptions]);
+
+  useEffect(() => {
+    if (!isMsilReadOnly || hasInitializedMsilMonth || !msilVisibleRowsForDefaults.length) return;
+
+    const latestMonth = getLatestMonthFromRows(msilVisibleRowsForDefaults);
+    if (latestMonth) {
+      setSelectedMonths([latestMonth]);
+      setMonth(latestMonth);
+    }
+    setHasInitializedMsilMonth(true);
+  }, [hasInitializedMsilMonth, isMsilReadOnly, msilVisibleRowsForDefaults]);
+
+  useEffect(() => {
+    if (!isMonthDropdownOpen) return undefined;
+
+    const handlePointerDown = (event) => {
+      if (!monthDropdownRef.current?.contains(event.target)) {
+        setIsMonthDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+    };
+  }, [isMonthDropdownOpen]);
 
   const getCurrentPageKey = () => (selectedDealer ? `detail:${activeTab}` : activeTab);
 
@@ -582,11 +717,13 @@ const handleBulkSaveScores = async () => {
 
   const addZone = () => {
     setZones((current) => [...current, '']);
+    setZonePage(getPageCount(zones.length + 1, DEFAULT_COMPACT_PAGE_SIZE));
     setIsEditingZones(true);
   };
 
   const addRegion = () => {
     setRegions((current) => [...current, '']);
+    setRegionPage(getPageCount(regions.length + 1, DEFAULT_COMPACT_PAGE_SIZE));
     setIsEditingRegions(true);
   };
 
@@ -628,6 +765,7 @@ const handleBulkSaveScores = async () => {
       ...current,
       { id, name: '', mailId: '', password: '1234' },
     ]);
+    setMsilPersonPage(getPageCount(msilPersons.length + 1, DEFAULT_TABLE_PAGE_SIZE));
     setEditingMsilId(id);
   };
 
@@ -652,6 +790,7 @@ const handleBulkSaveScores = async () => {
         msilPersons: [],
       },
     ]);
+    setDealerCredentialPage(getPageCount(dealerCredentials.length + 1, DEFAULT_TABLE_PAGE_SIZE));
     setEditingDealerId(id);
   };
 
@@ -669,6 +808,29 @@ const handleBulkSaveScores = async () => {
   const getDealerMsilSummary = (personIds = []) => {
     if (!personIds.length) return 'Select MSIL person';
     return personIds.map(getMsilPersonLabel).join(', ');
+  };
+
+  const getMonthFilterSummary = () => {
+    if (!selectedMonths.length) return 'All Months';
+    if (selectedMonths.length === MONTH_OPTIONS.length) return 'All Months';
+    if (selectedMonths.length <= 2) return selectedMonths.join(', ');
+    return `${selectedMonths.length} months selected`;
+  };
+
+  const toggleSelectedMonth = (nextMonth) => {
+    setHasInitializedMsilMonth(true);
+    setSelectedMonths((currentMonths) => (
+      currentMonths.includes(nextMonth)
+        ? currentMonths.filter((item) => item !== nextMonth)
+        : [...currentMonths, nextMonth]
+    ));
+    setMonth('');
+  };
+
+  const showAllMonthsForMsil = () => {
+    setHasInitializedMsilMonth(true);
+    setSelectedMonths([]);
+    setMonth('');
   };
 
   const toggleDealerMsilPerson = (dealerId, personId) => {
@@ -747,6 +909,37 @@ const handleBulkSaveScores = async () => {
   const activeScore = draftScore || selectedDealer?.score;
   const filteredTableRows = filterRows(tableRows);
   const filteredNscRows = filterRows(nscRows);
+  const paginatedTableRows = paginateItems(filteredTableRows, bscPage, DEFAULT_TABLE_PAGE_SIZE);
+  const paginatedNscRows = paginateItems(filteredNscRows, nscPage, DEFAULT_TABLE_PAGE_SIZE);
+  const paginatedExcelScores = paginateItems(parsedExcelScores, excelPreviewPage, DEFAULT_TABLE_PAGE_SIZE);
+  const paginatedDealerCredentials = paginateItems(dealerCredentials, dealerCredentialPage, DEFAULT_TABLE_PAGE_SIZE);
+  const paginatedZones = paginateItems(zones, zonePage, DEFAULT_COMPACT_PAGE_SIZE);
+  const paginatedRegions = paginateItems(regions, regionPage, DEFAULT_COMPACT_PAGE_SIZE);
+  const paginatedMsilPersons = paginateItems(msilPersons, msilPersonPage, DEFAULT_TABLE_PAGE_SIZE);
+
+  useEffect(() => {
+    setBscPage((currentPage) => Math.min(currentPage, getPageCount(filteredTableRows.length, DEFAULT_TABLE_PAGE_SIZE)));
+    setNscPage((currentPage) => Math.min(currentPage, getPageCount(filteredNscRows.length, DEFAULT_TABLE_PAGE_SIZE)));
+  }, [filteredTableRows.length, filteredNscRows.length]);
+
+  useEffect(() => {
+    setBscPage(1);
+    setNscPage(1);
+  }, [zone, region, dealer, month, selectedMonths, year]);
+
+  useEffect(() => {
+    setExcelPreviewPage((currentPage) => Math.min(currentPage, getPageCount(parsedExcelScores.length, DEFAULT_TABLE_PAGE_SIZE)));
+  }, [parsedExcelScores.length]);
+
+  useEffect(() => {
+    setDealerCredentialPage((currentPage) => Math.min(currentPage, getPageCount(dealerCredentials.length, DEFAULT_TABLE_PAGE_SIZE)));
+  }, [dealerCredentials.length]);
+
+  useEffect(() => {
+    setZonePage((currentPage) => Math.min(currentPage, getPageCount(zones.length, DEFAULT_COMPACT_PAGE_SIZE)));
+    setRegionPage((currentPage) => Math.min(currentPage, getPageCount(regions.length, DEFAULT_COMPACT_PAGE_SIZE)));
+    setMsilPersonPage((currentPage) => Math.min(currentPage, getPageCount(msilPersons.length, DEFAULT_TABLE_PAGE_SIZE)));
+  }, [zones.length, regions.length, msilPersons.length]);
 
   const showMasterTab = (tab, trackHistory = true) => {
     if (trackHistory && getCurrentPageKey() !== tab) {
@@ -979,12 +1172,48 @@ const handleBulkSaveScores = async () => {
 
                   <label className="msil-field">
                     <span>Month</span>
-                    <select value={month} onChange={(e) => setMonth(e.target.value)} className="msil-input">
-                      <option value="">All Months</option>
-                      {MONTH_OPTIONS.map((item) => (
-                        <option key={item} value={item}>{item}</option>
-                      ))}
-                    </select>
+                    {isMsilReadOnly ? (
+                      <div className="admin-month-multiselect" ref={monthDropdownRef}>
+                        <button
+                          type="button"
+                          className="admin-month-multiselect__trigger"
+                          onClick={() => setIsMonthDropdownOpen((isOpen) => !isOpen)}
+                        >
+                          <span>{getMonthFilterSummary()}</span>
+                          <span className="admin-month-multiselect__arrow">▾</span>
+                        </button>
+
+                        {isMonthDropdownOpen && (
+                          <div className="admin-month-multiselect__menu">
+                            <label className="admin-month-multiselect__option">
+                              <input
+                                type="checkbox"
+                                checked={!selectedMonths.length}
+                                onChange={showAllMonthsForMsil}
+                              />
+                              <span>All Months</span>
+                            </label>
+                            {MONTH_OPTIONS.map((item) => (
+                              <label key={item} className="admin-month-multiselect__option">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedMonths.includes(item)}
+                                  onChange={() => toggleSelectedMonth(item)}
+                                />
+                                <span>{item}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <select value={month} onChange={(e) => setMonth(e.target.value)} className="msil-input">
+                        <option value="">All Months</option>
+                        {MONTH_OPTIONS.map((item) => (
+                          <option key={item} value={item}>{item}</option>
+                        ))}
+                      </select>
+                    )}
                   </label>
 
                   <label className="msil-field">
@@ -1062,12 +1291,12 @@ const handleBulkSaveScores = async () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {dealerCredentials.map((row, index) => {
+                      {paginatedDealerCredentials.map((row, index) => {
                         const isRowEditing = editingDealerId === row.id;
 
                         return (
                           <tr key={row.id}>
-                            <td>{index + 1}</td>
+                            <td>{(dealerCredentialPage - 1) * DEFAULT_TABLE_PAGE_SIZE + index + 1}</td>
                             <td>
                               <input
                                 className="admin-access-input"
@@ -1174,6 +1403,13 @@ const handleBulkSaveScores = async () => {
                     </tbody>
                   </table>
                 </div>
+                <PaginationControls
+                  totalItems={dealerCredentials.length}
+                  page={dealerCredentialPage}
+                  pageSize={DEFAULT_TABLE_PAGE_SIZE}
+                  onPageChange={setDealerCredentialPage}
+                  label="dealers"
+                />
               </div>
             ) : activeTab === 'accessControl' ? (
               <div className="admin-access-page">
@@ -1194,19 +1430,30 @@ const handleBulkSaveScores = async () => {
                       </div>
                     </div>
                     <div className="admin-control-list">
-                      {zones.map((item, index) => (
+                      {paginatedZones.map((item, index) => {
+                        const actualIndex = (zonePage - 1) * DEFAULT_COMPACT_PAGE_SIZE + index;
+
+                        return (
                         <div key={`${item}-${index}`} className="admin-control-list__row">
                           {isEditingZones ? (
                             <input
                               className="admin-control-list__input"
                               value={item}
-                              onChange={(event) => updateZone(index, event.target.value)}
+                              onChange={(event) => updateZone(actualIndex, event.target.value)}
                               placeholder="Zone"
                             />
                           ) : item}
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
+                    <PaginationControls
+                      totalItems={zones.length}
+                      page={zonePage}
+                      pageSize={DEFAULT_COMPACT_PAGE_SIZE}
+                      onPageChange={setZonePage}
+                      label="zones"
+                    />
                   </div>
 
                   <div className="admin-control-card">
@@ -1225,19 +1472,30 @@ const handleBulkSaveScores = async () => {
                       </div>
                     </div>
                     <div className="admin-control-list">
-                      {regions.map((item, index) => (
+                      {paginatedRegions.map((item, index) => {
+                        const actualIndex = (regionPage - 1) * DEFAULT_COMPACT_PAGE_SIZE + index;
+
+                        return (
                         <div key={`${item}-${index}`} className="admin-control-list__row">
                           {isEditingRegions ? (
                             <input
                               className="admin-control-list__input"
                               value={item}
-                              onChange={(event) => updateRegion(index, event.target.value)}
+                              onChange={(event) => updateRegion(actualIndex, event.target.value)}
                               placeholder="Region"
                             />
                           ) : item}
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
+                    <PaginationControls
+                      totalItems={regions.length}
+                      page={regionPage}
+                      pageSize={DEFAULT_COMPACT_PAGE_SIZE}
+                      onPageChange={setRegionPage}
+                      label="regions"
+                    />
                   </div>
                 </div>
 
@@ -1258,12 +1516,12 @@ const handleBulkSaveScores = async () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {msilPersons.map((person, index) => {
+                      {paginatedMsilPersons.map((person, index) => {
                         const isRowEditing = editingMsilId === person.id;
 
                         return (
                           <tr key={person.id}>
-                            <td>{index + 1}</td>
+                            <td>{(msilPersonPage - 1) * DEFAULT_TABLE_PAGE_SIZE + index + 1}</td>
                             <td>
                               <input
                                 className="admin-access-input"
@@ -1308,6 +1566,13 @@ const handleBulkSaveScores = async () => {
                     </tbody>
                   </table>
                 </div>
+                <PaginationControls
+                  totalItems={msilPersons.length}
+                  page={msilPersonPage}
+                  pageSize={DEFAULT_TABLE_PAGE_SIZE}
+                  onPageChange={setMsilPersonPage}
+                  label="MSIL persons"
+                />
               </div>
             ) : activeTab === 'nsc' ? (
   <div className="msil-table-shell">
@@ -1337,9 +1602,9 @@ const handleBulkSaveScores = async () => {
             </td>
           </tr>
         ) : (
-          filteredNscRows.map((row, index) => (
+          paginatedNscRows.map((row, index) => (
             <tr key={row._id || index}>
-              <td>{index + 1}</td>
+              <td>{(nscPage - 1) * DEFAULT_TABLE_PAGE_SIZE + index + 1}</td>
               <td>{row.region || '-'}</td>
               <td>{row.dealerName || '-'}</td>
               <td>{getPreviousYearBand(row, tableRows)}</td>
@@ -1370,6 +1635,13 @@ const handleBulkSaveScores = async () => {
         )}
       </tbody>
     </table>
+    <PaginationControls
+      totalItems={filteredNscRows.length}
+      page={nscPage}
+      pageSize={DEFAULT_TABLE_PAGE_SIZE}
+      onPageChange={setNscPage}
+      label="NSC records"
+    />
   </div>
 ) : (
   <>
@@ -1433,12 +1705,12 @@ const handleBulkSaveScores = async () => {
               </tr>
             </thead>
             <tbody>
-              {parsedExcelScores.slice(0, 10).map((score, index) => {
+              {paginatedExcelScores.map((score, index) => {
                 const scoreCredential = getScoreCredential(score, dealerCredentials);
 
                 return (
                   <tr key={`${score.dealerCode}-${index}`}>
-                    <td>{index + 1}</td>
+                    <td>{(excelPreviewPage - 1) * DEFAULT_TABLE_PAGE_SIZE + index + 1}</td>
                     <td>{scoreCredential?.zone || '-'}</td>
                     <td>{scoreCredential?.region || score.region || '-'}</td>
                     <td>{score.dealerName || '-'}</td>
@@ -1455,11 +1727,13 @@ const handleBulkSaveScores = async () => {
           </table>
         </div>
 
-        {parsedExcelScores.length > 10 && (
-          <div style={{ marginTop: '10px', fontSize: '13px', color: '#166534' }}>
-            Showing first 10 dealers only. Total parsed: {parsedExcelScores.length}.
-          </div>
-        )}
+        <PaginationControls
+          totalItems={parsedExcelScores.length}
+          page={excelPreviewPage}
+          pageSize={DEFAULT_TABLE_PAGE_SIZE}
+          onPageChange={setExcelPreviewPage}
+          label="preview dealers"
+        />
       </div>
     )}
 
@@ -1494,12 +1768,12 @@ const handleBulkSaveScores = async () => {
               </td>
             </tr>
           ) : (
-            filteredTableRows.map((row, index) => {
+            paginatedTableRows.map((row, index) => {
               const rowCredential = getScoreCredential(row, dealerCredentials);
 
               return (
                 <tr key={row._id || index}>
-                  <td>{index + 1}</td>
+                  <td>{(bscPage - 1) * DEFAULT_TABLE_PAGE_SIZE + index + 1}</td>
                   <td>{rowCredential?.zone || '-'}</td>
                   <td>{rowCredential?.region || row.region || '-'}</td>
                   <td>{row.dealerName || '-'}</td>
@@ -1534,6 +1808,13 @@ const handleBulkSaveScores = async () => {
           )}
         </tbody>
       </table>
+      <PaginationControls
+        totalItems={filteredTableRows.length}
+        page={bscPage}
+        pageSize={DEFAULT_TABLE_PAGE_SIZE}
+        onPageChange={setBscPage}
+        label="BSC records"
+      />
     </div>
   </>
 )}          

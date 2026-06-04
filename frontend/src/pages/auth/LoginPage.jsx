@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -8,8 +8,14 @@ const LoginPage = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user?.role) {
+      navigate(`/${user.role}/dashboard`, { replace: true });
+    }
+  }, [navigate, user?.role]);
 
   const handleLogin = async (role) => {
     if (!username.trim() || !password.trim()) {
@@ -20,7 +26,7 @@ const LoginPage = () => {
     try {
       const user = await login(username, password, role);
       toast.success(`Welcome back!`);
-      navigate(`/${user.role}/dashboard`);
+      navigate(`/${user.role}/dashboard`, { replace: true });
     } catch (err) {
       toast.error(err?.message || err?.response?.data?.message || 'Login failed. Please try again.');
     } finally {
