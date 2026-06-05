@@ -1,0 +1,391 @@
+:root {
+  --brand-blue: #003087;
+  --ink: #172033;
+  --muted: #6b7280;
+  --surface: #eef2f7;
+  --page-start: #c7d2fe;
+  --page-end: #6366f1;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.login-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, var(--page-start) 0%, #a5b4fc 30%, #818cf8 60%, var(--page-end) 100%);
+}
+
+.app-navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 70px;
+  padding: 0 28px;
+  background: rgba(255, 255, 255, 0.85);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(12px);
+}
+
+.app-navbar__brand {
+  display: flex;
+  align-items: center;
+  min-width: 360px;
+  overflow: visible;
+}
+
+.app-navbar__brand-mark {
+  display: block;
+  width: auto;
+  height: 50px;
+  max-width: 300px;
+  object-fit: contain;
+  transform: scale(1.75);
+  transform-origin: left center;
+}
+
+.app-navbar__right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-navbar__powered-logo {
+  display: block;
+  width: auto;
+  height: 22px;
+  object-fit: contain;
+  margin-right: 4px;
+}
+
+.app-navbar__icon-btn {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 50%;
+  color: var(--brand-blue);
+  background: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+}
+
+.app-navbar__icon-btn svg {
+  width: 17px;
+  height: 17px;
+}
+
+.app-navbar__user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-navbar__avatar {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--brand-blue);
+}
+
+.app-navbar__avatar svg {
+  width: 22px;
+  height: 22px;
+}
+
+.app-navbar__user-info {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.app-navbar__user-name {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.app-navbar__user-code {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.login-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 70px);
+  gap: 90px;
+  padding: 42px 60px;
+}
+
+.login-illustration {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 600px;
+}
+
+.illustration-wrapper {
+  position: relative;
+  width: 500px;
+  height: 420px;
+}
+
+.float-elem {
+  position: absolute;
+  animation: floatAnim 3s ease-in-out infinite;
+}
+
+.float-clock {
+  top: 20px;
+  left: 160px;
+  width: 70px;
+  animation-delay: 0s;
+}
+
+.float-doc1 {
+  top: 60px;
+  left: 30px;
+  width: 55px;
+  animation-delay: 0.5s;
+}
+
+.float-user1 {
+  top: 80px;
+  left: 200px;
+  width: 65px;
+  animation-delay: 1s;
+}
+
+.float-wave {
+  top: 160px;
+  left: 10px;
+  width: 90px;
+  animation-delay: 0.8s;
+}
+
+.float-chat {
+  top: 195px;
+  left: 90px;
+  width: 90px;
+  animation-delay: 0.3s;
+}
+
+.float-checklist {
+  top: 60px;
+  right: 30px;
+  width: 130px;
+  animation-delay: 1.2s;
+}
+
+.float-terminal {
+  bottom: 60px;
+  left: 10px;
+  width: 110px;
+  animation-delay: 0.6s;
+}
+
+.illustration-person {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 340px;
+  transform: translateX(-50%);
+}
+
+.float-dots {
+  position: absolute;
+  top: 220px;
+  right: 60px;
+  width: 80px;
+  animation-delay: 1.5s;
+}
+
+@keyframes floatAnim {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.login-card {
+  width: min(430px, 92vw);
+  padding: 48px 52px;
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: 0 24px 60px rgba(30, 41, 59, 0.16);
+}
+
+.login-card__welcome {
+  margin: 0;
+  text-align: center;
+  font-size: 24px;
+}
+
+.login-card__title {
+  margin: 3px 0 0;
+  color: var(--brand-blue);
+  text-align: center;
+  font-size: 25px;
+}
+
+.login-card__divider {
+  width: 64px;
+  height: 2px;
+  margin: 18px auto 34px;
+  background: var(--brand-blue);
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.login-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  color: #4b5563;
+  font-size: 14px;
+}
+
+.login-form__field input {
+  height: 48px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+  font: inherit;
+  outline: none;
+}
+
+.login-form__field input:focus {
+  box-shadow: 0 0 0 3px rgba(0, 48, 135, 0.16), 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+.login-form__button {
+  height: 48px;
+  border: 0;
+  border-radius: 24px;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.login-form__button--dealer {
+  margin-top: 8px;
+  background: #19182b;
+}
+
+.login-form__button--msil {
+  background: var(--brand-blue);
+}
+
+.login-form__or {
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  color: #6b7280;
+  background: #e2e8f0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.login-form__admin {
+  align-self: center;
+  border: 0;
+  color: #6b7280;
+  background: transparent;
+  text-decoration: underline;
+  font: inherit;
+  cursor: pointer;
+}
+
+.toast-region {
+  position: fixed;
+  top: 88px;
+  right: 24px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.toast {
+  min-width: 270px;
+  max-width: 380px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  color: #fff;
+  background: #1f2937;
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.22);
+  font-weight: 700;
+  animation: toast-in 180ms ease-out;
+}
+
+.toast--success {
+  background: #16803a;
+}
+
+.toast--error {
+  background: #b42318;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 900px) {
+  .app-navbar {
+    padding: 0 16px;
+  }
+
+  .app-navbar__brand {
+    min-width: 210px;
+  }
+
+  .app-navbar__user-info,
+  .app-navbar__powered-logo {
+    display: none;
+  }
+
+  .login-content {
+    padding: 28px 20px;
+  }
+
+  .login-illustration {
+    display: none;
+  }
+
+  .login-card {
+    padding: 36px 28px;
+  }
+}
