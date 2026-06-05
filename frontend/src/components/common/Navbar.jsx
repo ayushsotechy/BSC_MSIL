@@ -49,8 +49,8 @@ const Navbar = () => {
             </svg>
           </div>
           <div className="navbar__user-info">
-            <span className="navbar__user-name">{user?.dealerName || 'Maruti ABC'}</span>
-            <span className="navbar__user-code">{user?.dealerCode || '124'}</span>
+            <span className="navbar__user-name">{user?.dealerName || user?.name || 'Please login'}</span>
+            <span className="navbar__user-code">{user?.dealerCode || user?.role || 'Select your role'}</span>
           </div>
         </div>
       </div>

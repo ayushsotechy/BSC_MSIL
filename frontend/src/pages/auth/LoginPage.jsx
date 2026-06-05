@@ -65,8 +65,8 @@ const LoginPage = () => {
               </svg>
             </div>
             <div className="login-navbar__user-info">
-              <span className="login-navbar__user-name">Maruti ABC</span>
-              <span className="login-navbar__user-code">124</span>
+              <span className="login-navbar__user-name">Please login</span>
+              <span className="login-navbar__user-code">Select your role</span>
             </div>
           </div>
         </div>
