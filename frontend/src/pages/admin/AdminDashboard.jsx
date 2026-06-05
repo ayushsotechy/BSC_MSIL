@@ -1,4 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { toast } from 'react-toastify';
 import Navbar from '../../components/common/Navbar';
 import BscScoreSheet from '../../components/dealer/BscScoreSheet';
 import accessControlService from '../../services/accessControl.service';
@@ -29,6 +32,8 @@ const DEFAULT_UPLOAD_YEAR = String(new Date().getFullYear());
 const DEFAULT_UPLOAD_MONTH = MONTH_OPTIONS[new Date().getMonth()];
 const DEFAULT_TABLE_PAGE_SIZE = 10;
 const DEFAULT_COMPACT_PAGE_SIZE = 6;
+const CREDENTIAL_BATCH_SIZE = 25;
+const SCORE_BATCH_SIZE = 10;
 const ACCESS_ZONES_KEY = 'bsc_access_zones';
 const ACCESS_REGIONS_KEY = 'bsc_access_regions';
 const ACCESS_MSIL_PERSONS_KEY = 'bsc_access_msil_persons';
@@ -90,6 +95,283 @@ const getPageCount = (totalItems, pageSize) => Math.max(1, Math.ceil((totalItems
 const paginateItems = (items, page, pageSize) => {
   const startIndex = (page - 1) * pageSize;
   return (items || []).slice(startIndex, startIndex + pageSize);
+};
+
+const chunkItems = (items, chunkSize) => {
+  const chunks = [];
+  for (let index = 0; index < (items || []).length; index += chunkSize) {
+    chunks.push(items.slice(index, index + chunkSize));
+  }
+  return chunks;
+};
+
+const sanitizeFilePart = (value) =>
+  String(value || 'BSC').replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '');
+
+const csvEscape = (value) => {
+  const text = String(value ?? '');
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+};
+
+const downloadCsv = (rows, filename) => {
+  const csv = rows.map((row) => row.map(csvEscape).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+
+  link.href = url;
+  link.download = filename;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+const MONTH_SHORT_NAMES = {
+  january: 'Jan',
+  february: 'Feb',
+  march: 'Mar',
+  april: 'Apr',
+  may: 'May',
+  june: 'Jun',
+  july: 'Jul',
+  august: 'Aug',
+  september: 'Sep',
+  october: 'Oct',
+  november: 'Nov',
+  december: 'Dec',
+};
+
+const formatEvaluationPeriod = (score) => {
+  const rawMonth = String(score?.month || '').trim();
+  if (rawMonth.includes("'")) return rawMonth;
+
+  const month = MONTH_SHORT_NAMES[rawMonth.toLowerCase()] || rawMonth.slice(0, 3) || 'Month';
+  const yearText = String(score?.fiscalYear || '').trim();
+  const fullYearMatch = yearText.match(/\b(20\d{2})\b/);
+  const fyMatch = yearText.match(/fy\s*\d{2}\s*[-/]\s*(\d{2})/i);
+  const yearSuffix = fullYearMatch ? fullYearMatch[1].slice(-2) : fyMatch?.[1] || '';
+
+  return yearSuffix ? `${month}'${yearSuffix}` : month;
+};
+
+const getScoreDenominator = (score, fallbackMaxPoints) => {
+  const scoreText = String(score?.fullYear?.provisionalScore || score?.earlyBird?.provisionalScore || '');
+  const denominator = scoreText.includes('/') ? Number(scoreText.split('/').pop()) : 0;
+  return denominator || fallbackMaxPoints || 0;
+};
+
+const downloadScorePdf = (score) => {
+  if (!score) return;
+
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 24;
+  const earlyBirdMax = (score.businessAreas || []).reduce((sum, area) => sum + metricTotal(area, 'earlyBird', 'maxPoints'), 0);
+  const fullYearMax = (score.businessAreas || []).reduce((sum, area) => sum + metricTotal(area, 'fullYear', 'maxPoints'), 0);
+  const earlyBirdMin = (score.businessAreas || []).reduce((sum, area) => sum + metricTotal(area, 'earlyBird', 'minPoints'), 0);
+  const fullYearMin = (score.businessAreas || []).reduce((sum, area) => sum + metricTotal(area, 'fullYear', 'minPoints'), 0);
+  const earlyBirdAchieved = (score.businessAreas || []).reduce((sum, area) => sum + metricTotal(area, 'earlyBird', 'achieved'), 0);
+  const fullYearAchieved = (score.businessAreas || []).reduce((sum, area) => sum + metricTotal(area, 'fullYear', 'achieved'), 0);
+  const pdfRows = [];
+
+  (score.businessAreas || []).forEach((area) => {
+    (area.parameters || []).forEach((param, index) => {
+      pdfRows.push([
+        index === 0 ? area.areaName || '' : '',
+        String(param.sNo || ''),
+        param.parameter || '',
+        String(metricValue(param.earlyBird, 'maxPoints')),
+        String(metricValue(param.earlyBird, 'minPoints')),
+        String(metricValue(param.earlyBird, 'achieved')),
+        String(metricValue(param.fullYear, 'maxPoints')),
+        String(metricValue(param.fullYear, 'minPoints')),
+        String(metricValue(param.fullYear, 'achieved')),
+      ]);
+    });
+
+    pdfRows.push([
+      `${area.areaName || ''} Total`,
+      '',
+      '',
+      String(metricTotal(area, 'earlyBird', 'maxPoints')),
+      String(metricTotal(area, 'earlyBird', 'minPoints')),
+      String(metricTotal(area, 'earlyBird', 'achieved')),
+      String(metricTotal(area, 'fullYear', 'maxPoints')),
+      String(metricTotal(area, 'fullYear', 'minPoints')),
+      String(metricTotal(area, 'fullYear', 'achieved')),
+    ]);
+  });
+
+  pdfRows.push([
+    'TOTAL',
+    '',
+    '',
+    String(earlyBirdMax),
+    String(earlyBirdMin),
+    String(earlyBirdAchieved),
+    String(fullYearMax),
+    String(fullYearMin),
+    String(fullYearAchieved),
+  ]);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.text(`BSC ${score.fiscalYear || ''} PROVISIONAL SCORE SHEET`, pageWidth / 2, 34, { align: 'center' });
+
+  autoTable(doc, {
+    startY: 48,
+    theme: 'grid',
+    margin: { left: margin, right: margin },
+    styles: {
+      font: 'helvetica',
+      fontSize: 9,
+      cellPadding: 6,
+      valign: 'middle',
+      lineColor: [214, 221, 235],
+      lineWidth: 0.6,
+    },
+    body: [
+      ['BSC Parent Dealer Code', score.dealerCode || '', 'Region', score.region || '', 'Dealer Name', score.dealerName || ''],
+      ['Fiscal Year', score.fiscalYear || '', 'Month', score.month || '', '', ''],
+      ['Early Bird Provisional Score', score.earlyBird?.provisionalScore || '', 'Full Year Provisional Score', score.fullYear?.provisionalScore || '', '', ''],
+      ['Early Bird Provisional Qualification', score.earlyBird?.qualification || '', 'Full Year Provisional Score %', score.fullYear?.provisionalScorePercent || '', '', ''],
+      ['Early Bird Provisional Band', score.earlyBird?.band || '', 'Full Year Band', score.fullYear?.band || '', '', ''],
+    ],
+    columnStyles: {
+      0: { fillColor: [74, 110, 224], textColor: 255, fontStyle: 'bold', cellWidth: 130 },
+      1: { cellWidth: 120 },
+      2: { fillColor: [74, 110, 224], textColor: 255, fontStyle: 'bold', cellWidth: 130 },
+      3: { cellWidth: 120 },
+      4: { fillColor: [74, 110, 224], textColor: 255, fontStyle: 'bold', cellWidth: 130 },
+      5: { cellWidth: 120 },
+    },
+  });
+
+  autoTable(doc, {
+    startY: doc.lastAutoTable.finalY + 16,
+    theme: 'grid',
+    margin: { left: margin, right: margin, bottom: 42 },
+    styles: {
+      font: 'helvetica',
+      fontSize: 7.4,
+      cellPadding: 4.5,
+      valign: 'middle',
+      lineColor: [214, 221, 235],
+      lineWidth: 0.55,
+      textColor: [55, 65, 81],
+    },
+    head: [
+      ['Business Area', 'S.No.', 'Parameter', 'EARLY BIRD EVALUATION', '', '', 'FULL YEAR EVALUATION', '', ''],
+      ['', '', '', 'Max Points', 'Min Points', 'Points Achieved', 'Max Points', 'Min Points', 'Points Achieved'],
+    ],
+    body: pdfRows,
+    columnStyles: {
+      0: { cellWidth: 108, halign: 'center' },
+      1: { cellWidth: 34, halign: 'center' },
+      2: { cellWidth: 248 },
+      3: { cellWidth: 52, halign: 'center' },
+      4: { cellWidth: 52, halign: 'center' },
+      5: { cellWidth: 68, halign: 'center' },
+      6: { cellWidth: 52, halign: 'center' },
+      7: { cellWidth: 52, halign: 'center' },
+      8: { cellWidth: 68, halign: 'center' },
+    },
+    didParseCell: ({ cell, row, column }) => {
+      const raw = row.raw || [];
+      const isTotal = row.section === 'body' && String(raw[0] || '').includes('Total');
+      const isGrandTotal = row.section === 'body' && String(raw[0] || '') === 'TOTAL';
+      const isEarlyBirdColumn = column.index >= 3 && column.index <= 5;
+      const isFullYearColumn = column.index >= 6 && column.index <= 8;
+
+      if (row.section === 'head') {
+        cell.styles.fontStyle = 'bold';
+        cell.styles.halign = 'center';
+
+        if (column.index <= 2) {
+          cell.styles.fillColor = [74, 110, 224];
+          cell.styles.textColor = 255;
+        } else if (isEarlyBirdColumn) {
+          cell.styles.fillColor = [217, 221, 231];
+          cell.styles.textColor = [31, 47, 95];
+        } else if (isFullYearColumn) {
+          cell.styles.fillColor = [38, 59, 134];
+          cell.styles.textColor = 255;
+        }
+      }
+
+      if (row.section === 'body') {
+        if (column.index === 0 && raw[0] && !isTotal && !isGrandTotal) {
+          cell.styles.fillColor = [74, 110, 224];
+          cell.styles.textColor = 255;
+          cell.styles.fontStyle = 'bold';
+        } else if (isEarlyBirdColumn) {
+          cell.styles.fillColor = [238, 240, 245];
+        } else if (isFullYearColumn) {
+          cell.styles.fillColor = [220, 232, 255];
+        }
+
+        if (isTotal || isGrandTotal) {
+          cell.styles.fontStyle = 'bold';
+
+          if (column.index <= 2) {
+            cell.styles.fillColor = isGrandTotal ? [255, 255, 255] : [229, 231, 235];
+            cell.styles.textColor = [31, 41, 55];
+            cell.styles.halign = column.index === 0 ? 'right' : 'center';
+          } else if (isEarlyBirdColumn) {
+            cell.styles.fillColor = [217, 221, 231];
+            cell.styles.textColor = [31, 41, 55];
+          } else if (isFullYearColumn) {
+            cell.styles.fillColor = [38, 59, 134];
+            cell.styles.textColor = 255;
+          }
+        }
+      }
+    },
+  });
+
+  const noteMaxPoints = getScoreDenominator(score, fullYearMax || earlyBirdMax);
+  const noteText = `Note :\n1. Evaluation till ${formatEvaluationPeriod(score)} has been done out of ${noteMaxPoints} Points excluding parameter norms related to ARENA & TV Manpower Certification, True Value Retention, Service Infrastructure, MSGA (Norm C), Dealer Financials, ARENA & TV Sales Infrastructure and Adequate Insurance Coverage & Preventive Safety Audit parameters.\n2. Vertical's score cannot be higher than the total maximum points of that vertical or less than zero for Sales & Marketing Performance and Sales Quality, True Value Performance (excluding ELV), Service Performance and Service Quality and Parts and Accessories.`;
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const noteFontSize = 8.5;
+  const noteWidth = pageWidth - (margin * 2) - 16;
+  const noteLines = doc.splitTextToSize(noteText, noteWidth);
+  const noteHeight = (noteLines.length * noteFontSize * 1.18) + 24;
+  let noteStartY = doc.lastAutoTable.finalY;
+
+  if (noteStartY + noteHeight > pageHeight - margin) {
+    doc.addPage('a4', 'landscape');
+    noteStartY = margin;
+  }
+
+  autoTable(doc, {
+    startY: noteStartY,
+    theme: 'grid',
+    rowPageBreak: 'avoid',
+    margin: { left: margin, right: margin },
+    styles: {
+      font: 'helvetica',
+      fontSize: 8.5,
+      cellPadding: 8,
+      lineColor: [17, 24, 39],
+      lineWidth: 1,
+      textColor: [17, 24, 39],
+    },
+    body: [[noteText]],
+  });
+
+  const filename = `BSC_${sanitizeFilePart(score.dealerCode)}_${sanitizeFilePart(score.fiscalYear)}_${sanitizeFilePart(score.month)}.pdf`;
+  const blobUrl = URL.createObjectURL(doc.output('blob'));
+  const link = document.createElement('a');
+
+  link.href = blobUrl;
+  link.download = filename;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 1500);
 };
 
 const PaginationControls = ({ totalItems, page, pageSize, onPageChange, label = 'list' }) => {
@@ -207,6 +489,10 @@ const metricValue = (metric, key) => {
 };
 
 const metricTotal = (area, period, key) => {
+  const total = area?.[`${period}Total`];
+  if (total && typeof total === 'object') return Number(metricValue(total, key)) || 0;
+  if (key === 'achieved' && total !== undefined && total !== null && total !== '') return Number(total) || 0;
+
   const parameters = area?.parameters || [];
 
   if (parameters.length) {
@@ -216,10 +502,6 @@ const metricTotal = (area, period, key) => {
     );
   }
 
-  const total = area?.[`${period}Total`];
-  if (total && typeof total === 'object') return metricValue(total, key);
-  if (key === 'achieved') return Number(total) || 0;
-
   return 0;
 };
 
@@ -227,6 +509,12 @@ const normalizeMetric = (metric = {}) => ({
   maxPoints: Number(metricValue(metric, 'maxPoints')) || 0,
   minPoints: Number(metricValue(metric, 'minPoints')) || 0,
   achieved: Number(metricValue(metric, 'achieved')) || 0,
+});
+
+const normalizeTotalMetric = (area, period) => ({
+  maxPoints: metricTotal(area, period, 'maxPoints'),
+  minPoints: metricTotal(area, period, 'minPoints'),
+  achieved: metricTotal(area, period, 'achieved'),
 });
 
 const normalizeScoreForApi = (score) => ({
@@ -240,29 +528,33 @@ const normalizeScoreForApi = (score) => ({
   yearScore: score?.yearScore || score?.fullYear?.provisionalScore || score?.earlyBird?.provisionalScore || '',
   provisionalType: score?.provisionalType || 'provisional',
   earlyBird: {
-    provisionalScore: `${(score?.businessAreas || []).reduce((sum, area) => sum + (Number(metricTotal(area, 'earlyBird', 'achieved')) || 0), 0)}/${(score?.businessAreas || []).reduce((sum, area) => sum + (Number(metricTotal(area, 'earlyBird', 'maxPoints')) || 0), 0)}`,
+    provisionalScore: score?.earlyBird?.provisionalScore || `${(score?.businessAreas || []).reduce((sum, area) => sum + (Number(metricTotal(area, 'earlyBird', 'achieved')) || 0), 0)}/${(score?.businessAreas || []).reduce((sum, area) => sum + (Number(metricTotal(area, 'earlyBird', 'maxPoints')) || 0), 0)}`,
     provisionalScorePercent: (() => {
+      if (score?.earlyBird?.provisionalScorePercent) return score.earlyBird.provisionalScorePercent;
       const achieved = (score?.businessAreas || []).reduce((sum, area) => sum + (Number(metricTotal(area, 'earlyBird', 'achieved')) || 0), 0);
       const max = (score?.businessAreas || []).reduce((sum, area) => sum + (Number(metricTotal(area, 'earlyBird', 'maxPoints')) || 0), 0);
       return max ? `${((achieved / max) * 100).toFixed(1)}%` : '0.0%';
     })(),
     qualification: score?.earlyBird?.qualification || 'N',
+    total: score?.earlyBird?.total,
     band: score?.earlyBird?.band || '',
   },
   fullYear: {
-    provisionalScore: `${(score?.businessAreas || []).reduce((sum, area) => sum + (Number(metricTotal(area, 'fullYear', 'achieved')) || 0), 0)}/${(score?.businessAreas || []).reduce((sum, area) => sum + (Number(metricTotal(area, 'fullYear', 'maxPoints')) || 0), 0)}`,
+    provisionalScore: score?.fullYear?.provisionalScore || `${(score?.businessAreas || []).reduce((sum, area) => sum + (Number(metricTotal(area, 'fullYear', 'achieved')) || 0), 0)}/${(score?.businessAreas || []).reduce((sum, area) => sum + (Number(metricTotal(area, 'fullYear', 'maxPoints')) || 0), 0)}`,
     provisionalScorePercent: (() => {
+      if (score?.fullYear?.provisionalScorePercent) return score.fullYear.provisionalScorePercent;
       const achieved = (score?.businessAreas || []).reduce((sum, area) => sum + (Number(metricTotal(area, 'fullYear', 'achieved')) || 0), 0);
       const max = (score?.businessAreas || []).reduce((sum, area) => sum + (Number(metricTotal(area, 'fullYear', 'maxPoints')) || 0), 0);
       return max ? `${((achieved / max) * 100).toFixed(1)}%` : '0.0%';
     })(),
     qualification: score?.fullYear?.qualification || 'N',
+    total: score?.fullYear?.total,
     band: score?.fullYear?.band || '',
   },
   businessAreas: (score?.businessAreas || []).map((area) => ({
     areaName: area?.areaName || '',
-    earlyBirdTotal: Number(metricTotal(area, 'earlyBird', 'achieved')) || 0,
-    fullYearTotal: Number(metricTotal(area, 'fullYear', 'achieved')) || 0,
+    earlyBirdTotal: normalizeTotalMetric(area, 'earlyBird'),
+    fullYearTotal: normalizeTotalMetric(area, 'fullYear'),
     parameters: (area?.parameters || []).map((param) => ({
       sNo: param?.sNo,
       parameter: param?.parameter || param?.name || '',
@@ -380,7 +672,9 @@ const AdminDashboard = ({ readOnly = false }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isUploadingExcel, setIsUploadingExcel] = useState(false);
   const [parsedExcelScores, setParsedExcelScores] = useState([]);
+  const [parsedExcelCredentials, setParsedExcelCredentials] = useState([]);
   const [isSavingBulk, setIsSavingBulk] = useState(false);
+  const [bulkSaveProgress, setBulkSaveProgress] = useState('');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadYear, setUploadYear] = useState(DEFAULT_UPLOAD_YEAR);
   const [uploadMonth, setUploadMonth] = useState(DEFAULT_UPLOAD_MONTH);
@@ -388,6 +682,7 @@ const AdminDashboard = ({ readOnly = false }) => {
   const [regions, setRegions] = useState(() => readStoredList(ACCESS_REGIONS_KEY, defaultAccessData.regions));
   const [msilPersons, setMsilPersons] = useState(() => readStoredList(ACCESS_MSIL_PERSONS_KEY, defaultAccessData.msilPersons));
   const [dealerCredentials, setDealerCredentials] = useState(() => readStoredList(ACCESS_DEALER_CREDENTIALS_KEY, defaultAccessData.dealerCredentials));
+  const [dealerCredentialSearch, setDealerCredentialSearch] = useState('');
   const [openMsilDropdownId, setOpenMsilDropdownId] = useState(null);
   const [isAccessSaving, setIsAccessSaving] = useState(false);
   const [isEditingZones, setIsEditingZones] = useState(false);
@@ -460,7 +755,7 @@ const AdminDashboard = ({ readOnly = false }) => {
   const fetchMasterData = async () => {
     try {
       setIsLoading(true);
-      const response = await bscService.getScores();
+      const response = await bscService.getScores({ summary: true });
       const dbData = response.data || [];
       setTableRows(dbData);
       setNscRows(dbData);
@@ -503,13 +798,70 @@ const AdminDashboard = ({ readOnly = false }) => {
       });
       applyAccessControlData(response.data || response);
       if (onSuccess) onSuccess();
-      alert(response.message || 'Access control saved successfully.');
+      toast.success(response.message || 'Access control saved successfully.');
     } catch (error) {
       console.error('Failed to save access control:', error);
-      alert(error.response?.data?.message || 'Failed to save access control.');
+      toast.error(error.response?.data?.message || 'Failed to save access control.');
     } finally {
       setIsAccessSaving(false);
     }
+  };
+
+  const buildAccessDraftWithExcelCredentials = (excelCredentials = parsedExcelCredentials) => {
+    const nextZones = [...new Map(
+      [...zones, ...excelCredentials.map((credential) => credential.zone)]
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+        .map((item) => [item.toLowerCase(), item])
+    ).values()];
+
+    const nextRegions = [...new Map(
+      [...regions, ...excelCredentials.map((credential) => credential.region)]
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+        .map((item) => [item.toLowerCase(), item])
+    ).values()];
+
+    const hasAyush = msilPersons.some((person) =>
+      String(person.name || '').trim().toLowerCase() === 'ayush' ||
+      String(person.mailId || '').trim().toLowerCase() === 'ayush@gmail.com'
+    );
+    const nextMsilPersons = hasAyush
+      ? msilPersons
+      : [...msilPersons, { id: createId('msil'), name: 'ayush', mailId: 'ayush@gmail.com', password: '1234' }];
+
+    const credentialMap = new Map(
+      dealerCredentials.map((credential) => [
+        String(credential.dealerCode || '').trim().toLowerCase(),
+        credential,
+      ])
+    );
+
+    excelCredentials.forEach((credential, index) => {
+      const dealerCode = String(credential.dealerCode || '').trim();
+      if (!dealerCode) return;
+
+      const existingCredential = credentialMap.get(dealerCode.toLowerCase()) || {};
+
+      credentialMap.set(dealerCode.toLowerCase(), {
+        id: credentialMap.get(dealerCode.toLowerCase())?.id || credential.id || createId('dealer'),
+        dealerCode,
+        dealerName: credential.dealerName || dealerCode,
+        mailId: credential.mailId || `dealer${index + 1}@gmail.com`,
+        password: credential.password || '1234',
+        zone: credential.zone || '',
+        region: credential.region || '',
+        msilPersons: ['ayush'],
+        ...existingCredential,
+      });
+    });
+
+    return {
+      zones: nextZones,
+      regions: nextRegions,
+      msilPersons: nextMsilPersons,
+      dealerCredentials: [...credentialMap.values()],
+    };
   };
 
   // Fetch exactly from DB
@@ -585,15 +937,23 @@ const AdminDashboard = ({ readOnly = false }) => {
     setPageHistory((history) => (history[history.length - 1] === currentPage ? history : [...history, currentPage]));
   };
 
-  const openDealerScore = (row, editing = false, tab = 'bsc') => {
-    // If it's coming from MongoDB, it is already a fully formed scorecard
-    // so we don't need to 'cloneScoreForDealer' the master template over it.
-    const score = cloneScore(row); 
-    pushCurrentPage();
-    setActiveTab(tab);
-    setSelectedDealer({ row, score });
-    setDraftScore(score);
-    setIsEditing(editing);
+  const openDealerScore = async (row, editing = false, tab = 'bsc') => {
+    try {
+      const hasFullScore = Array.isArray(row?.businessAreas) && row.businessAreas.length > 0;
+      const fullRow = hasFullScore || !row?._id
+        ? row
+        : (await bscService.getScoreById(row._id)).data;
+      const score = cloneScore(fullRow);
+
+      pushCurrentPage();
+      setActiveTab(tab);
+      setSelectedDealer({ row: fullRow, score });
+      setDraftScore(score);
+      setIsEditing(editing);
+    } catch (error) {
+      console.error('Failed to load score sheet:', error);
+      toast.error(error.response?.data?.message || 'Failed to load score sheet.');
+    }
   };
 
   const openUploadModal = () => {
@@ -608,12 +968,12 @@ const AdminDashboard = ({ readOnly = false }) => {
 
   const handleChooseExcelFile = () => {
     if (!uploadYear.trim()) {
-      alert('Please enter year before uploading.');
+      toast.warn('Please enter year before uploading.');
       return;
     }
 
     if (!uploadMonth) {
-      alert('Please select month before uploading.');
+      toast.warn('Please select month before uploading.');
       return;
     }
 
@@ -634,39 +994,26 @@ const AdminDashboard = ({ readOnly = false }) => {
     });
 
     const parsedScores = response.data || [];
+    const parsedCredentials = response.accessCredentials || [];
 
     if (!parsedScores.length) {
-      alert('No valid scorecards found in Excel.');
-      return;
-    }
-
-    const allowedDealerCodes = new Set(
-      dealerCredentials
-        .map((credential) => String(credential.dealerCode || '').trim().toLowerCase())
-        .filter(Boolean)
-    );
-    const unauthorizedDealerCodes = [
-      ...new Set(
-        parsedScores
-          .map((score) => String(score.dealerCode || '').trim())
-          .filter((dealerCode) => !allowedDealerCodes.has(dealerCode.toLowerCase()))
-      ),
-    ];
-
-    if (unauthorizedDealerCodes.length) {
-      alert(
-        `Upload blocked. Add these dealer codes in Access Credentials first:\n\n${unauthorizedDealerCodes.join('\n')}`
-      );
+      toast.warn('No valid scorecards found in Excel.');
       return;
     }
 
     setParsedExcelScores(parsedScores);
+    setParsedExcelCredentials(parsedCredentials);
+    const accessDraft = buildAccessDraftWithExcelCredentials(parsedCredentials);
+    setZones(accessDraft.zones);
+    setRegions(accessDraft.regions);
+    setMsilPersons(accessDraft.msilPersons);
+    setDealerCredentials(accessDraft.dealerCredentials);
     setShowUploadModal(false);
 
-    alert(`Excel parsed successfully for ${uploadMonth} ${uploadYear}. ${parsedScores.length} dealers found. Please review preview and click Save All Dealers.`);
+    toast.success(`Excel parsed successfully for ${uploadMonth} ${uploadYear}. ${parsedScores.length} dealers found. Generated access credentials are ready for review; click Save All Dealers when done.`);
   } catch (error) {
     console.error('Excel upload failed:', error);
-    alert(error.response?.data?.message || 'Excel upload failed. Check console.');
+    toast.error(error.response?.data?.message || 'Excel upload failed. Check console.');
   } finally {
     setIsUploadingExcel(false);
     e.target.value = '';
@@ -674,44 +1021,64 @@ const AdminDashboard = ({ readOnly = false }) => {
 };
 const handleBulkSaveScores = async () => {
   if (!parsedExcelScores.length) {
-    alert('No parsed scorecards to save.');
-    return;
-  }
-
-  const allowedDealerCodes = new Set(
-    dealerCredentials
-      .map((credential) => String(credential.dealerCode || '').trim().toLowerCase())
-      .filter(Boolean)
-  );
-  const unauthorizedDealerCodes = [
-    ...new Set(
-      parsedExcelScores
-        .map((score) => String(score.dealerCode || '').trim())
-        .filter((dealerCode) => !allowedDealerCodes.has(dealerCode.toLowerCase()))
-    ),
-  ];
-
-  if (unauthorizedDealerCodes.length) {
-    alert(
-      `Cannot save. Add these dealer codes in Access Credentials first:\n\n${unauthorizedDealerCodes.join('\n')}`
-    );
+    toast.warn('No parsed scorecards to save.');
     return;
   }
 
   try {
     setIsSavingBulk(true);
+    const accessDraft = buildAccessDraftWithExcelCredentials();
+    const excelDealerCodeSet = new Set(
+      parsedExcelScores
+        .map((score) => String(score.dealerCode || '').trim().toLowerCase())
+        .filter(Boolean)
+    );
+    const credentialsToSave = accessDraft.dealerCredentials.filter((credential) =>
+      excelDealerCodeSet.has(String(credential.dealerCode || '').trim().toLowerCase())
+    );
+    const credentialBatches = chunkItems(credentialsToSave, CREDENTIAL_BATCH_SIZE);
+    const scoreBatches = chunkItems(parsedExcelScores, SCORE_BATCH_SIZE);
 
-    const response = await bscService.bulkSaveScores(parsedExcelScores);
+    setBulkSaveProgress('Saving access lists...');
+    await accessControlService.saveAccessControl({
+      zones: accessDraft.zones,
+      regions: accessDraft.regions,
+      msilPersons: accessDraft.msilPersons,
+      dealerCredentials: [],
+      returnData: false,
+    });
 
-    alert(response.message || `${response.count || 0} scorecards saved successfully.`);
+    for (let batchIndex = 0; batchIndex < credentialBatches.length; batchIndex += 1) {
+      setBulkSaveProgress(`Saving credentials ${Math.min((batchIndex + 1) * CREDENTIAL_BATCH_SIZE, credentialsToSave.length)}/${credentialsToSave.length}...`);
+      await accessControlService.saveAccessControl({
+        zones: accessDraft.zones,
+        regions: accessDraft.regions,
+        msilPersons: accessDraft.msilPersons,
+        dealerCredentials: credentialBatches[batchIndex],
+        returnData: false,
+      });
+    }
+
+    let savedScoreCount = 0;
+    for (let batchIndex = 0; batchIndex < scoreBatches.length; batchIndex += 1) {
+      setBulkSaveProgress(`Saving scorecards ${Math.min((batchIndex + 1) * SCORE_BATCH_SIZE, parsedExcelScores.length)}/${parsedExcelScores.length}...`);
+      const response = await bscService.bulkSaveScores(scoreBatches[batchIndex], { upsert: true });
+      savedScoreCount += Number(response.count || 0);
+    }
+
+    toast.success(`${savedScoreCount} scorecards and ${credentialsToSave.length} access credentials saved successfully.`);
 
     setParsedExcelScores([]);
+    setParsedExcelCredentials([]);
+    setBulkSaveProgress('');
+    await fetchAccessControlData();
     await fetchMasterData();
   } catch (error) {
     console.error('Bulk save failed:', error);
-    alert(error.response?.data?.message || 'Failed to save parsed scorecards.');
+    toast.error(error.response?.data?.message || 'Failed to save parsed scorecards.');
   } finally {
     setIsSavingBulk(false);
+    setBulkSaveProgress('');
   }
 };
 
@@ -733,6 +1100,68 @@ const handleBulkSaveScores = async () => {
 
   const updateRegion = (index, value) => {
     setRegions((current) => current.map((item, itemIndex) => (itemIndex === index ? value : item)));
+  };
+
+  const removeZone = async (index) => {
+    const zoneToRemove = zones[index];
+    const nextZones = zones.filter((_, itemIndex) => itemIndex !== index);
+    const nextDealerCredentials = dealerCredentials.map((credential) => (
+      String(credential.zone || '').trim().toLowerCase() === String(zoneToRemove || '').trim().toLowerCase()
+        ? { ...credential, zone: '', zoneId: '' }
+        : credential
+    ));
+
+    if (!String(zoneToRemove || '').trim()) {
+      setZones(nextZones);
+      setDealerCredentials(nextDealerCredentials);
+      return;
+    }
+
+    try {
+      setIsAccessSaving(true);
+      const response = await accessControlService.deleteZone(zoneToRemove);
+      setZones(nextZones);
+      setDealerCredentials(nextDealerCredentials);
+      writeStoredList(ACCESS_ZONES_KEY, nextZones);
+      writeStoredList(ACCESS_DEALER_CREDENTIALS_KEY, nextDealerCredentials);
+      toast.success(response.message || 'Zone removed successfully.');
+    } catch (error) {
+      console.error('Failed to remove zone:', error);
+      toast.error(error.response?.data?.message || 'Failed to remove zone.');
+    } finally {
+      setIsAccessSaving(false);
+    }
+  };
+
+  const removeRegion = async (index) => {
+    const regionToRemove = regions[index];
+    const nextRegions = regions.filter((_, itemIndex) => itemIndex !== index);
+    const nextDealerCredentials = dealerCredentials.map((credential) => (
+      String(credential.region || '').trim().toLowerCase() === String(regionToRemove || '').trim().toLowerCase()
+        ? { ...credential, region: '', regionId: '' }
+        : credential
+    ));
+
+    if (!String(regionToRemove || '').trim()) {
+      setRegions(nextRegions);
+      setDealerCredentials(nextDealerCredentials);
+      return;
+    }
+
+    try {
+      setIsAccessSaving(true);
+      const response = await accessControlService.deleteRegion(regionToRemove);
+      setRegions(nextRegions);
+      setDealerCredentials(nextDealerCredentials);
+      writeStoredList(ACCESS_REGIONS_KEY, nextRegions);
+      writeStoredList(ACCESS_DEALER_CREDENTIALS_KEY, nextDealerCredentials);
+      toast.success(response.message || 'Region removed successfully.');
+    } catch (error) {
+      console.error('Failed to remove region:', error);
+      toast.error(error.response?.data?.message || 'Failed to remove region.');
+    } finally {
+      setIsAccessSaving(false);
+    }
   };
 
   const saveZones = () => {
@@ -775,6 +1204,37 @@ const handleBulkSaveScores = async () => {
     )));
   };
 
+  const removeMsilPerson = async (id) => {
+    const personToRemove = msilPersons.find((person) => person.id === id);
+    const nextMsilPersons = msilPersons.filter((person) => person.id !== id);
+    const nextDealerCredentials = dealerCredentials.map((credential) => ({
+      ...credential,
+      msilPersons: (credential.msilPersons || []).filter((personId) => personId !== id),
+    }));
+
+    if (!personToRemove?._id && !String(personToRemove?.mailId || personToRemove?.name || '').trim()) {
+      setMsilPersons(nextMsilPersons);
+      setDealerCredentials(nextDealerCredentials);
+      return;
+    }
+
+    try {
+      setIsAccessSaving(true);
+      const response = await accessControlService.deleteMsilPerson(personToRemove?._id || personToRemove?.mailId || personToRemove?.name || personToRemove?.id);
+      setMsilPersons(nextMsilPersons);
+      setDealerCredentials(nextDealerCredentials);
+      setEditingMsilId((currentId) => (currentId === id ? null : currentId));
+      writeStoredList(ACCESS_MSIL_PERSONS_KEY, nextMsilPersons);
+      writeStoredList(ACCESS_DEALER_CREDENTIALS_KEY, nextDealerCredentials);
+      toast.success(response.message || 'MSIL person removed successfully.');
+    } catch (error) {
+      console.error('Failed to remove MSIL person:', error);
+      toast.error(error.response?.data?.message || 'Failed to remove MSIL person.');
+    } finally {
+      setIsAccessSaving(false);
+    }
+  };
+
   const addDealerCredential = () => {
     const id = createId('dealer');
     setDealerCredentials((current) => [
@@ -798,6 +1258,31 @@ const handleBulkSaveScores = async () => {
     setDealerCredentials((current) => current.map((row) => (
       row.id === id ? { ...row, [field]: value } : row
     )));
+  };
+
+  const removeDealerCredential = async (id) => {
+    const credentialToRemove = dealerCredentials.find((credential) => credential.id === id);
+    const nextDealerCredentials = dealerCredentials.filter((credential) => credential.id !== id);
+
+    if (!credentialToRemove?._id && !String(credentialToRemove?.dealerCode || '').trim()) {
+      setDealerCredentials(nextDealerCredentials);
+      return;
+    }
+
+    try {
+      setIsAccessSaving(true);
+      const response = await accessControlService.deleteDealerCredential(credentialToRemove?._id || credentialToRemove?.dealerCode || credentialToRemove?.id);
+      setDealerCredentials(nextDealerCredentials);
+      setEditingDealerId((currentId) => (currentId === id ? null : currentId));
+      setOpenMsilDropdownId((currentId) => (currentId === id ? null : currentId));
+      writeStoredList(ACCESS_DEALER_CREDENTIALS_KEY, nextDealerCredentials);
+      toast.success(response.message || 'Dealer credential removed successfully.');
+    } catch (error) {
+      console.error('Failed to remove dealer credential:', error);
+      toast.error(error.response?.data?.message || 'Failed to remove dealer credential.');
+    } finally {
+      setIsAccessSaving(false);
+    }
   };
 
   const getMsilPersonLabel = (personId) => {
@@ -846,33 +1331,68 @@ const handleBulkSaveScores = async () => {
     }));
   };
 
-  const saveMsilPerson = (id) => {
+  const saveMsilPerson = async (id) => {
     const person = msilPersons.find((item) => item.id === id);
     if (!String(person?.name || '').trim() && !String(person?.mailId || '').trim()) {
-      alert('Please enter MSIL person name or mail ID.');
+      toast.warn('Please enter MSIL person name or mail ID.');
       return;
     }
 
-    saveAccessControlData(() => setEditingMsilId(null));
+    try {
+      setIsAccessSaving(true);
+      const response = await accessControlService.saveMsilPerson(person);
+      const savedPerson = response.data || person;
+
+      setMsilPersons((current) => {
+        const nextPeople = current.map((item) => (item.id === id ? { ...item, ...savedPerson } : item));
+        writeStoredList(ACCESS_MSIL_PERSONS_KEY, nextPeople);
+        return nextPeople;
+      });
+      setEditingMsilId(null);
+      toast.success(response.message || 'MSIL person saved successfully.');
+    } catch (error) {
+      console.error('Failed to save MSIL person:', error);
+      toast.error(error.response?.data?.message || 'Failed to save MSIL person.');
+    } finally {
+      setIsAccessSaving(false);
+    }
   };
 
-  const saveDealerCredential = (id) => {
+  const saveDealerCredential = async (id) => {
     const credential = dealerCredentials.find((item) => item.id === id);
 
     if (!String(credential?.dealerCode || '').trim()) {
-      alert('Please enter dealer code.');
+      toast.warn('Please enter dealer code.');
       return;
     }
 
     if (!String(credential?.password || '').trim()) {
-      alert('Please enter dealer password.');
+      toast.warn('Please enter dealer password.');
       return;
     }
 
-    saveAccessControlData(() => {
+    try {
+      setIsAccessSaving(true);
+      const response = await accessControlService.saveDealerCredential(credential);
+      const savedCredential = response.data || credential;
+
+      setDealerCredentials((current) => {
+        const existingIndex = current.findIndex((item) => item.id === id);
+        const nextCredentials = existingIndex >= 0
+          ? current.map((item) => (item.id === id ? { ...item, ...savedCredential } : item))
+          : [...current, savedCredential];
+        writeStoredList(ACCESS_DEALER_CREDENTIALS_KEY, nextCredentials);
+        return nextCredentials;
+      });
       setEditingDealerId(null);
       setOpenMsilDropdownId(null);
-    });
+      toast.success(response.message || 'Dealer credential saved successfully.');
+    } catch (error) {
+      console.error('Failed to save dealer credential:', error);
+      toast.error(error.response?.data?.message || 'Failed to save dealer credential.');
+    } finally {
+      setIsAccessSaving(false);
+    }
   };
   const handleAddNewScore = () => {
     if (readOnly) return;
@@ -898,21 +1418,88 @@ const handleBulkSaveScores = async () => {
       setSelectedDealer((current) => (current ? { ...current, row: savedScore, score: cloneScore(savedScore) } : current));
       setDraftScore(cloneScore(savedScore));
       setIsEditing(false);
-      alert('Scorecard saved successfully!');
+      toast.success('Scorecard saved successfully!');
       await fetchMasterData();
     } catch (error) {
       console.error('Failed to save', error);
-      alert(error.response?.data?.message || 'Failed to save data. Check console.');
+      toast.error(error.response?.data?.message || 'Failed to save data. Check console.');
     }
+  };
+
+  const handleDownloadScoreSheet = () => {
+    const score = activeScore;
+
+    if (!score) {
+      toast.warn('No score sheet is loaded to download.');
+      return;
+    }
+
+    try {
+      downloadScorePdf(score);
+    } catch (error) {
+      console.error('Failed to download score sheet:', error);
+      toast.error(error.response?.data?.message || 'Failed to download score sheet.');
+    }
+  };
+
+  const handleExportReviewSheet = () => {
+    const score = activeScore;
+    if (!score) {
+      toast.warn('No score sheet is loaded to export.');
+      return;
+    }
+
+    const rows = [
+      ['BSC Review Sheet'],
+      ['Dealer Code', score.dealerCode || ''],
+      ['Dealer Name', score.dealerName || ''],
+      ['Region', score.region || ''],
+      ['Fiscal Year', score.fiscalYear || ''],
+      ['Month', score.month || ''],
+      [],
+      ['Metric', 'Early Bird', 'Full Year'],
+      ['Provisional Score', score.earlyBird?.provisionalScore || '', score.fullYear?.provisionalScore || ''],
+      ['Score Achievement', score.earlyBird?.provisionalScorePercent || '', score.fullYear?.provisionalScorePercent || ''],
+      ['Qualification', score.earlyBird?.qualification || '', score.fullYear?.qualification || ''],
+      ['Band', score.earlyBird?.band || '', score.fullYear?.band || ''],
+      [],
+      ['Business Area', 'EB Max', 'EB Min', 'EB Achieved', 'FY Max', 'FY Min', 'FY Achieved'],
+      ...(score.businessAreas || []).map((area) => [
+        area.areaName || '',
+        metricTotal(area, 'earlyBird', 'maxPoints'),
+        metricTotal(area, 'earlyBird', 'minPoints'),
+        metricTotal(area, 'earlyBird', 'achieved'),
+        metricTotal(area, 'fullYear', 'maxPoints'),
+        metricTotal(area, 'fullYear', 'minPoints'),
+        metricTotal(area, 'fullYear', 'achieved'),
+      ]),
+    ];
+
+    const filename = `BSC_Review_${sanitizeFilePart(score.dealerCode)}_${sanitizeFilePart(score.fiscalYear)}_${sanitizeFilePart(score.month)}.csv`;
+    downloadCsv(rows, filename);
+  };
+
+  const handleOpenAzureDocuments = () => {
+    toast.info('Azure document server link is not configured yet. Later this will open the dealer review-sheet documents using dealer code as the unique key.');
   };
 
   const activeScore = draftScore || selectedDealer?.score;
   const filteredTableRows = filterRows(tableRows);
   const filteredNscRows = filterRows(nscRows);
+  const filteredDealerCredentials = dealerCredentials.filter((credential) => {
+    const searchText = dealerCredentialSearch.trim().toLowerCase();
+    if (!searchText) return true;
+
+    return [
+      credential.dealerCode,
+      credential.dealerName,
+      credential.mailId,
+    ].some((value) => String(value || '').toLowerCase().includes(searchText));
+  });
   const paginatedTableRows = paginateItems(filteredTableRows, bscPage, DEFAULT_TABLE_PAGE_SIZE);
   const paginatedNscRows = paginateItems(filteredNscRows, nscPage, DEFAULT_TABLE_PAGE_SIZE);
   const paginatedExcelScores = paginateItems(parsedExcelScores, excelPreviewPage, DEFAULT_TABLE_PAGE_SIZE);
-  const paginatedDealerCredentials = paginateItems(dealerCredentials, dealerCredentialPage, DEFAULT_TABLE_PAGE_SIZE);
+  const paginatedDealerCredentials = paginateItems(filteredDealerCredentials, dealerCredentialPage, DEFAULT_TABLE_PAGE_SIZE);
   const paginatedZones = paginateItems(zones, zonePage, DEFAULT_COMPACT_PAGE_SIZE);
   const paginatedRegions = paginateItems(regions, regionPage, DEFAULT_COMPACT_PAGE_SIZE);
   const paginatedMsilPersons = paginateItems(msilPersons, msilPersonPage, DEFAULT_TABLE_PAGE_SIZE);
@@ -932,8 +1519,12 @@ const handleBulkSaveScores = async () => {
   }, [parsedExcelScores.length]);
 
   useEffect(() => {
-    setDealerCredentialPage((currentPage) => Math.min(currentPage, getPageCount(dealerCredentials.length, DEFAULT_TABLE_PAGE_SIZE)));
-  }, [dealerCredentials.length]);
+    setDealerCredentialPage((currentPage) => Math.min(currentPage, getPageCount(filteredDealerCredentials.length, DEFAULT_TABLE_PAGE_SIZE)));
+  }, [filteredDealerCredentials.length]);
+
+  useEffect(() => {
+    setDealerCredentialPage(1);
+  }, [dealerCredentialSearch]);
 
   useEffect(() => {
     setZonePage((currentPage) => Math.min(currentPage, getPageCount(zones.length, DEFAULT_COMPACT_PAGE_SIZE)));
@@ -999,8 +1590,18 @@ const handleBulkSaveScores = async () => {
               <h2 className="dealer-main__title">
                   {isEditing && !readOnly ? `Edit ${activeTab === 'nsc' ? 'NSC' : 'BSC'} Score page` : `View ${activeTab === 'nsc' ? 'NSC' : 'BSC'} Score page`}
                 </h2>
+                <div className="admin-editor-actions admin-editor-actions--exports">
+                  <button className="admin-action-btn admin-action-btn--download" type="button" onClick={handleDownloadScoreSheet}>
+                    Score Sheet
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
+                  </button>
+                  <button className="admin-action-btn admin-action-btn--review" type="button" onClick={handleExportReviewSheet}>
+                    Review Sheet
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7h16" /><path d="M4 12h10" /><path d="M4 17h16" /><path d="M17 12l3 3 3-3" /></svg>
+                  </button>
+                </div>
                 {!readOnly && (
-                <div className="admin-editor-actions">
+                <div className="admin-editor-actions admin-editor-actions--primary">
                   {isEditing ? (
                     <>
                       <button className="admin-action-btn admin-action-btn--save" type="button" onClick={handleSaveScore}>
@@ -1082,6 +1683,18 @@ const handleBulkSaveScores = async () => {
       <>
         <button
           type="button"
+          className="admin-action-btn admin-action-btn--azure"
+          onClick={handleOpenAzureDocuments}
+        >
+          Azure Documents
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M3 7h6l2 2h10v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+            <path d="M3 7V5a2 2 0 0 1 2-2h4l2 2h4" />
+          </svg>
+        </button>
+
+        <button
+          type="button"
           className="admin-action-btn admin-action-btn--save"
           onClick={openUploadModal}
           disabled={isUploadingExcel}
@@ -1116,7 +1729,7 @@ const handleBulkSaveScores = async () => {
               opacity: isSavingBulk ? 0.7 : 1,
             }}
           >
-            {isSavingBulk ? 'Saving...' : `Save All Dealers (${parsedExcelScores.length})`}
+            {isSavingBulk ? (bulkSaveProgress || 'Saving...') : `Save All Dealers (${parsedExcelScores.length})`}
           </button>
         )}
       </>
@@ -1275,6 +1888,16 @@ const handleBulkSaveScores = async () => {
                   <h3>Dealer Access Credentials</h3>
                   <button className="admin-access-add-btn" type="button" onClick={addDealerCredential}>Add</button>
                 </div>
+                <div className="admin-access-search">
+                  <label htmlFor="dealer-credential-search">Search Dealer Code</label>
+                  <input
+                    id="dealer-credential-search"
+                    type="search"
+                    value={dealerCredentialSearch}
+                    onChange={(event) => setDealerCredentialSearch(event.target.value)}
+                    placeholder="Enter dealer code..."
+                  />
+                </div>
 
                 <div className="msil-table-shell">
                   <table className="msil-table admin-access-table">
@@ -1387,15 +2010,27 @@ const handleBulkSaveScores = async () => {
                               </div>
                             </td>
                             <td>
-                              {isRowEditing ? (
-                                <button className="admin-access-row-btn admin-access-row-btn--save" type="button" onClick={() => saveDealerCredential(row.id)} disabled={isAccessSaving}>
-                                  {isAccessSaving ? 'Saving...' : 'Save'}
+                              <div className="admin-row-actions">
+                                {isRowEditing ? (
+                                  <button className="admin-access-row-btn admin-access-row-btn--save" type="button" onClick={() => saveDealerCredential(row.id)} disabled={isAccessSaving}>
+                                    {isAccessSaving ? 'Saving...' : 'Save'}
+                                  </button>
+                                ) : (
+                                  <button className="admin-access-row-btn" type="button" onClick={() => setEditingDealerId(row.id)}>
+                                    Edit
+                                  </button>
+                                )}
+                                <button
+                                  className="admin-row-delete-btn"
+                                  type="button"
+                                  onClick={() => removeDealerCredential(row.id)}
+                                  disabled={isAccessSaving}
+                                  aria-label={`Remove dealer credential ${row.dealerCode || ''}`}
+                                  title="Remove"
+                                >
+                                  ×
                                 </button>
-                              ) : (
-                                <button className="admin-access-row-btn" type="button" onClick={() => setEditingDealerId(row.id)}>
-                                  Edit
-                                </button>
-                              )}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -1404,7 +2039,7 @@ const handleBulkSaveScores = async () => {
                   </table>
                 </div>
                 <PaginationControls
-                  totalItems={dealerCredentials.length}
+                  totalItems={filteredDealerCredentials.length}
                   page={dealerCredentialPage}
                   pageSize={DEFAULT_TABLE_PAGE_SIZE}
                   onPageChange={setDealerCredentialPage}
@@ -1436,12 +2071,24 @@ const handleBulkSaveScores = async () => {
                         return (
                         <div key={`${item}-${index}`} className="admin-control-list__row">
                           {isEditingZones ? (
-                            <input
-                              className="admin-control-list__input"
-                              value={item}
-                              onChange={(event) => updateZone(actualIndex, event.target.value)}
-                              placeholder="Zone"
-                            />
+                            <>
+                              <input
+                                className="admin-control-list__input"
+                                value={item}
+                                onChange={(event) => updateZone(actualIndex, event.target.value)}
+                                placeholder="Zone"
+                              />
+                              <button
+                                className="admin-control-remove-btn"
+                                type="button"
+                                onClick={() => removeZone(actualIndex)}
+                                disabled={isAccessSaving}
+                                aria-label={`Remove zone ${item || ''}`}
+                                title="Remove"
+                              >
+                                ×
+                              </button>
+                            </>
                           ) : item}
                         </div>
                         );
@@ -1478,12 +2125,24 @@ const handleBulkSaveScores = async () => {
                         return (
                         <div key={`${item}-${index}`} className="admin-control-list__row">
                           {isEditingRegions ? (
-                            <input
-                              className="admin-control-list__input"
-                              value={item}
-                              onChange={(event) => updateRegion(actualIndex, event.target.value)}
-                              placeholder="Region"
-                            />
+                            <>
+                              <input
+                                className="admin-control-list__input"
+                                value={item}
+                                onChange={(event) => updateRegion(actualIndex, event.target.value)}
+                                placeholder="Region"
+                              />
+                              <button
+                                className="admin-control-remove-btn"
+                                type="button"
+                                onClick={() => removeRegion(actualIndex)}
+                                disabled={isAccessSaving}
+                                aria-label={`Remove region ${item || ''}`}
+                                title="Remove"
+                              >
+                                ×
+                              </button>
+                            </>
                           ) : item}
                         </div>
                         );
@@ -1550,15 +2209,27 @@ const handleBulkSaveScores = async () => {
                               />
                             </td>
                             <td>
-                              {isRowEditing ? (
-                                <button className="admin-access-row-btn admin-access-row-btn--save" type="button" onClick={() => saveMsilPerson(person.id)} disabled={isAccessSaving}>
-                                  {isAccessSaving ? 'Saving...' : 'Save'}
+                              <div className="admin-row-actions">
+                                {isRowEditing ? (
+                                  <button className="admin-access-row-btn admin-access-row-btn--save" type="button" onClick={() => saveMsilPerson(person.id)} disabled={isAccessSaving}>
+                                    {isAccessSaving ? 'Saving...' : 'Save'}
+                                  </button>
+                                ) : (
+                                  <button className="admin-access-row-btn" type="button" onClick={() => setEditingMsilId(person.id)}>
+                                    Edit
+                                  </button>
+                                )}
+                                <button
+                                  className="admin-row-delete-btn"
+                                  type="button"
+                                  onClick={() => removeMsilPerson(person.id)}
+                                  disabled={isAccessSaving}
+                                  aria-label={`Remove MSIL person ${person.name || person.mailId || ''}`}
+                                  title="Remove"
+                                >
+                                  ×
                                 </button>
-                              ) : (
-                                <button className="admin-access-row-btn" type="button" onClick={() => setEditingMsilId(person.id)}>
-                                  Edit
-                                </button>
-                              )}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -1674,7 +2345,10 @@ const handleBulkSaveScores = async () => {
 
           <button
             type="button"
-            onClick={() => setParsedExcelScores([])}
+            onClick={() => {
+              setParsedExcelScores([]);
+              setParsedExcelCredentials([]);
+            }}
             style={{
               padding: '8px 12px',
               border: '1px solid #d1d5db',

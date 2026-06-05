@@ -3,7 +3,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 28px;
-  height: 62px;
+  height: 70px;
   background: rgba(255, 255, 255, 0.42);
   backdrop-filter: blur(18px) saturate(180%);
   -webkit-backdrop-filter: blur(18px) saturate(180%);
@@ -20,8 +20,10 @@
 }
 
 .navbar__brand {
- display: flex;
+  display: flex;
   align-items: center;
+  min-width: 360px;
+  overflow: visible;
 }
 
 .navbar__logo-text {
@@ -38,20 +40,15 @@
 }
 
 .navbar__brand-mark {
-  height: 45px; /* Increase the base height */
+  height: 50px;
+  max-width: 300px;
   width: auto;
-  
-  /* Force the white background to disappear */
-  mix-blend-mode: multiply; 
-  
-  /* This is the magic! Zoom in by 40% to crop out the built-in white space */
-  transform: scale(2.0); 
-  
-  /* Ensures it zooms from the left side so it doesn't overlap your menu */
-  transform-origin: left center; 
-  
-  /* A slight nudge to align it perfectly with your left margin */
-  margin-left: 10px;
+  display: block;
+  object-fit: contain;
+  mix-blend-mode: normal;
+  transform: scale(1.75);
+  transform-origin: left center;
+  margin-left: 0;
 }
 
 .navbar__brand-text {

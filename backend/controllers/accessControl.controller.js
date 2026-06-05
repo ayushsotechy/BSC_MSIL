@@ -41,21 +41,25 @@ const cleanText = (value) => String(value || '').trim();
 const normalizeName = (value) => cleanText(value).toLowerCase();
 
 const ensureDefaultLists = async () => {
-  await Promise.all(DEFAULT_ZONES.map((name) =>
-    AccessZone.updateOne(
-      { name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
-      { $setOnInsert: { name } },
-      { upsert: true }
-    )
-  ));
+  if ((await AccessZone.countDocuments()) === 0) {
+    await Promise.all(DEFAULT_ZONES.map((name) =>
+      AccessZone.updateOne(
+        { name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+        { $setOnInsert: { name } },
+        { upsert: true }
+      )
+    ));
+  }
 
-  await Promise.all(DEFAULT_REGIONS.map((name) =>
-    AccessRegion.updateOne(
-      { name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
-      { $setOnInsert: { name } },
-      { upsert: true }
-    )
-  ));
+  if ((await AccessRegion.countDocuments()) === 0) {
+    await Promise.all(DEFAULT_REGIONS.map((name) =>
+      AccessRegion.updateOne(
+        { name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+        { $setOnInsert: { name } },
+        { upsert: true }
+      )
+    ));
+  }
 
   if ((await MsilAccess.countDocuments()) === 0) {
     await MsilAccess.insertMany(DEFAULT_MSIL_PERSONS);
@@ -193,21 +197,34 @@ const buildLookup = (docs) => {
   return lookup;
 };
 
+const serializeDealerCredential = (credential) => ({
+  id: String(credential._id),
+  _id: String(credential._id),
+  dealerCode: credential.dealerCode,
+  dealerName: credential.dealerName || credential.dealerCode,
+  mailId: credential.mailId || '',
+  password: credential.password || '',
+  zone: credential.zone?.name || '',
+  region: credential.region?.name || '',
+  zoneId: credential.zone?._id ? String(credential.zone._id) : '',
+  regionId: credential.region?._id ? String(credential.region._id) : '',
+  msilPersons: (credential.msilPersons || []).map((person) => String(person._id || person)),
+});
+
+const serializeMsilPerson = (person) => ({
+  id: String(person._id),
+  _id: String(person._id),
+  name: person.name || '',
+  mailId: person.mailId || '',
+  password: person.password || '',
+});
+
 const upsertDealerCredentials = async (rows, zoneLookup, regionLookup, msilLookup) => {
+  const operations = [];
+
   for (const row of rows || []) {
     const dealerCode = cleanText(row?.dealerCode);
     if (!dealerCode) continue;
-
-    const id = row?._id || row?.id;
-    let doc = null;
-
-    if (isObjectId(id)) {
-      doc = await DealerAccessCredential.findById(id);
-    }
-
-    if (!doc) {
-      doc = await DealerAccessCredential.findOne({ dealerCode });
-    }
 
     const zoneDoc = zoneLookup.get(String(row?.zoneId || ''))
       || zoneLookup.get(normalizeName(row?.zone));
@@ -229,12 +246,17 @@ const upsertDealerCredentials = async (rows, zoneLookup, regionLookup, msilLooku
       isActive: true,
     };
 
-    if (doc) {
-      Object.assign(doc, payload);
-      await doc.save();
-    } else {
-      await DealerAccessCredential.create(payload);
-    }
+    operations.push({
+      updateOne: {
+        filter: { dealerCode },
+        update: { $set: payload },
+        upsert: true,
+      },
+    });
+  }
+
+  if (operations.length) {
+    await DealerAccessCredential.bulkWrite(operations, { ordered: false });
   }
 };
 
@@ -249,7 +271,7 @@ exports.getAccessControl = async (req, res, next) => {
 
 exports.syncAccessControl = async (req, res, next) => {
   try {
-    const { zones = [], regions = [], msilPersons = [], dealerCredentials = [] } = req.body || {};
+    const { zones = [], regions = [], msilPersons = [], dealerCredentials = [], returnData = true } = req.body || {};
 
     const zoneDocs = await upsertNamedList(AccessZone, zones);
     const regionDocs = await upsertNamedList(AccessRegion, regions);
@@ -261,8 +283,189 @@ exports.syncAccessControl = async (req, res, next) => {
 
     await upsertDealerCredentials(dealerCredentials, zoneLookup, regionLookup, msilLookup);
 
+    if (returnData === false) {
+      return res.json({
+        success: true,
+        message: 'Access control saved successfully.',
+        count: dealerCredentials.length,
+      });
+    }
+
     const data = await getSerializedAccessControl();
-    res.json({ success: true, message: 'Access control saved successfully.', data });
+    return res.json({ success: true, message: 'Access control saved successfully.', data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.upsertDealerCredential = async (req, res, next) => {
+  try {
+    await ensureDefaultLists();
+
+    const row = req.body || {};
+    const dealerCode = cleanText(row.dealerCode);
+    if (!dealerCode) {
+      return res.status(400).json({ message: 'Dealer code is required.' });
+    }
+
+    if (cleanText(row.zone)) {
+      await upsertNamedList(AccessZone, [row.zone]);
+    }
+    if (cleanText(row.region)) {
+      await upsertNamedList(AccessRegion, [row.region]);
+    }
+
+    const [zoneDocs, regionDocs, msilDocs] = await Promise.all([
+      AccessZone.find(),
+      AccessRegion.find(),
+      MsilAccess.find({ isActive: true }),
+    ]);
+    const zoneLookup = buildLookup(zoneDocs);
+    const regionLookup = buildLookup(regionDocs);
+    const msilLookup = buildLookup(msilDocs);
+    const zoneDoc = zoneLookup.get(String(row.zoneId || '')) || zoneLookup.get(normalizeName(row.zone));
+    const regionDoc = regionLookup.get(String(row.regionId || '')) || regionLookup.get(normalizeName(row.region));
+    const msilIds = (row.msilPersons || [])
+      .map((personId) => msilLookup.get(String(personId)) || msilLookup.get(normalizeName(personId)))
+      .filter(Boolean)
+      .map((person) => person._id);
+
+    await DealerAccessCredential.updateOne(
+      { dealerCode },
+      {
+        $set: {
+          dealerCode,
+          dealerName: cleanText(row.dealerName) || dealerCode,
+          mailId: cleanText(row.mailId || row.email).toLowerCase(),
+          password: cleanText(row.password) || '1234',
+          zone: zoneDoc?._id,
+          region: regionDoc?._id,
+          msilPersons: msilIds,
+          isActive: true,
+        },
+      },
+      { upsert: true }
+    );
+
+    const credential = await DealerAccessCredential.findOne({ dealerCode })
+      .populate('zone')
+      .populate('region')
+      .populate('msilPersons')
+      .lean();
+
+    return res.json({
+      success: true,
+      message: 'Dealer credential saved successfully.',
+      data: serializeDealerCredential(credential),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.upsertMsilPerson = async (req, res, next) => {
+  try {
+    const [person] = await upsertMsilPersons([req.body || {}]);
+    if (!person) {
+      return res.status(400).json({ message: 'Please enter MSIL person name or mail ID.' });
+    }
+
+    return res.json({
+      success: true,
+      message: 'MSIL person saved successfully.',
+      data: serializeMsilPerson(person),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const findNamedDoc = async (Model, identifier) => {
+  const value = cleanText(identifier);
+  if (!value) return null;
+
+  if (isObjectId(value)) {
+    const doc = await Model.findById(value);
+    if (doc) return doc;
+  }
+
+  return Model.findOne({ name: new RegExp(`^${value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') });
+};
+
+exports.deleteZone = async (req, res, next) => {
+  try {
+    const zone = await findNamedDoc(AccessZone, req.params.id);
+    if (!zone) {
+      return res.status(404).json({ message: 'Zone not found.' });
+    }
+
+    await Promise.all([
+      DealerAccessCredential.updateMany({ zone: zone._id }, { $unset: { zone: '' } }),
+      AccessZone.deleteOne({ _id: zone._id }),
+    ]);
+
+    return res.json({ success: true, message: 'Zone removed successfully.' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.deleteRegion = async (req, res, next) => {
+  try {
+    const region = await findNamedDoc(AccessRegion, req.params.id);
+    if (!region) {
+      return res.status(404).json({ message: 'Region not found.' });
+    }
+
+    await Promise.all([
+      DealerAccessCredential.updateMany({ region: region._id }, { $unset: { region: '' } }),
+      AccessRegion.deleteOne({ _id: region._id }),
+    ]);
+
+    return res.json({ success: true, message: 'Region removed successfully.' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.deleteMsilPerson = async (req, res, next) => {
+  try {
+    const id = req.params.id;
+    const query = isObjectId(id)
+      ? { _id: id }
+      : { $or: [{ name: new RegExp(`^${cleanText(id).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }, { mailId: cleanText(id).toLowerCase() }] };
+
+    const person = await MsilAccess.findOne(query);
+    if (!person) {
+      return res.status(404).json({ message: 'MSIL person not found.' });
+    }
+
+    await Promise.all([
+      DealerAccessCredential.updateMany({ msilPersons: person._id }, { $pull: { msilPersons: person._id } }),
+      MsilAccess.updateOne({ _id: person._id }, { $set: { isActive: false } }),
+    ]);
+
+    return res.json({ success: true, message: 'MSIL person removed successfully.' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.deleteDealerCredential = async (req, res, next) => {
+  try {
+    const id = req.params.id;
+    const query = isObjectId(id)
+      ? { _id: id }
+      : { dealerCode: new RegExp(`^${cleanText(id).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') };
+
+    const credential = await DealerAccessCredential.findOne(query);
+    if (!credential) {
+      return res.status(404).json({ message: 'Dealer credential not found.' });
+    }
+
+    await DealerAccessCredential.updateOne({ _id: credential._id }, { $set: { isActive: false } });
+
+    return res.json({ success: true, message: 'Dealer credential removed successfully.' });
   } catch (error) {
     next(error);
   }

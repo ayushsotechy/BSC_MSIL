@@ -49,6 +49,24 @@
   font-size: 13px;
 }
 
+.bsc-note {
+  background: #ffffff;
+  border: 2px solid #111827;
+  border-top: none;
+  padding: 18px 20px 22px;
+  color: #111827;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.bsc-note p {
+  margin: 0 0 6px;
+}
+
+.bsc-note p:last-child {
+  margin-bottom: 0;
+}
+
 .bg-primary {
   background-color: #4a6ee0;
   color: white;
@@ -61,6 +79,54 @@
   color: white;
   text-align: center;
   font-weight: 600;
+}
+
+.period-header,
+.period-subheader {
+  text-align: center;
+  font-weight: 700;
+}
+
+.period-header--early {
+  background-color: #d9dde7;
+  color: #1f2f5f;
+}
+
+.period-subheader--early {
+  background-color: #e3e6ee;
+  color: #1f2f5f;
+}
+
+.period-header--full {
+  background-color: #263b86;
+  color: #ffffff;
+}
+
+.period-subheader--full {
+  background-color: #304996;
+  color: #ffffff;
+}
+
+.period-cell--early {
+  background-color: #eef0f5;
+}
+
+.period-cell--full {
+  background-color: #dce8ff;
+}
+
+.subtotal-period--early {
+  background-color: #d9dde5;
+  color: #1f2937;
+}
+
+.subtotal-period--full {
+  background-color: #263b86;
+  color: #ffffff;
+}
+
+.subtotal-period--achieved {
+  font-weight: 800;
 }
 
 .bg-light {
@@ -100,6 +166,14 @@
   background-color: #e0e7ff; /* Light blue background to show it's editable */
 }
 
+.editable-cell.period-cell--early {
+  background-color: #e6e9f2;
+}
+
+.editable-cell.period-cell--full {
+  background-color: #cfe0ff;
+}
+
 .editable-cell input,
 .editable-cell textarea {
   width: 70px;
@@ -109,6 +183,11 @@
   border-radius: 4px;
   font-weight: bold;
   background-color: white;
+}
+
+.subtotal-period.editable-cell input {
+  width: 72px;
+  color: #10244e;
 }
 
 .score-table td:nth-child(3).editable-cell input,

@@ -41,7 +41,7 @@ const createMarutiScoreTemplate = () => ({
     band: 'NO BAND',
   },
   businessAreas: [
-    area('Sales & Marketing Performance', [
+    area('Sales Performance', [
       parameter(1, 'All Models Wholesales Performance', metric(40, 0), metric(40, 0)),
       parameter(2, 'ARENA SUV Models Wholesales Performance', metric(60, 0), metric(60, 0)),
       parameter(3, 'ARENA Models New Car VAHAN Registration', metric(100, 0), metric(100, 0)),
@@ -50,30 +50,43 @@ const createMarutiScoreTemplate = () => ({
     ]),
     area('Sales Quality Performance', [
       parameter(6, 'Net Promoter Score - ARENA', metric(40, 0), metric(40, 0)),
+      parameter(7, 'ARENA Channel Sales Manpower Certification', metric(0, 0), metric(0, 0)),
     ]),
     area('Service Performance', [
-      parameter(7, 'Service to Sales Ratio', metric(60, -30), metric(60, -30)),
-      parameter(8, 'Extended Warranty Penetration', metric(60, -20), metric(60, -20)),
-      parameter(9, 'Customer Convenience Package Penetration', metric(35, -20), metric(35, -20)),
+      parameter(8, 'Service to Sales Ratio', metric(60, -30), metric(60, -30)),
+      parameter(9, 'Extended Warranty Penetration', metric(60, -20), metric(60, -20)),
+      parameter(10, 'Customer Convenience Package Penetration', metric(35, -20), metric(35, -20)),
+      parameter(11, 'True Value Vehicle Retention', metric(0, 0), metric(0, 0)),
     ]),
-    area('Service Quality Performance', [
-      parameter(10, 'Net Promoter Score - Service & Bodyshop', metric(40, -20), metric(40, -20)),
-      parameter(11, 'Customer Complaint Index - Service', metric(30, -10), metric(30, -10)),
-      parameter(12, 'Service Manpower Certification', metric(30, 0), metric(30, 0)),
+    area('Service Quality', [
+      parameter(12, 'Net Promoter Score - Service & Bodyshop', metric(40, -20), metric(40, -20)),
+      parameter(13, 'Customer Complaint Index - Service', metric(30, -10), metric(30, -10)),
+      parameter(14, 'Service Manpower Certification', metric(30, 0), metric(30, 0)),
+      parameter(15, 'Service Infrastructure', metric(0, 0), metric(0, 0)),
     ]),
-    area('Parts and Accessories Performance', [
-      parameter(13, 'MSGP Performance', metric(65, -15), metric(65, -15)),
-      parameter(14, 'MSGA Performance', metric(85, -10), metric(85, -10)),
+    area('Parts & Accessories Performance', [
+      parameter(16, 'MSGP Performance', metric(65, -15), metric(65, -15)),
+      parameter(17, 'MSGA Performance- Showroom Acc / Veh', metric(75, -10), metric(75, -10)),
+      parameter(18, 'MSGA Performance - Online Order Conversion', metric(10, 0), metric(10, 0)),
+      parameter(19, 'MSGA Performance - Body Coat Penetration', metric(0, 0), metric(0, 0)),
     ]),
-    area('True Value Performance', [
-      parameter('15a', 'TV Business Performance - Exchange Growth', metric(60, 0), metric(60, 0)),
-      parameter('15b', 'TV Business Performance - Purchase Cycle Management', metric(40, 0), metric(40, 0)),
-      parameter(16, 'Net Promoter Score - True Value', metric(10, 0), metric(10, 0)),
-      parameter(17, 'End of Life Vehicle Scrap Penetration (Bonus Parameter)', metric(0, 0), metric(40, 0), { excludeFromTotals: true }),
+    area('True Value', [
+      parameter(20, 'Exch. Growth', metric(60, 0), metric(60, 0)),
+      parameter(21, 'Purchase Cycle Management', metric(40, 0), metric(40, 0)),
+      parameter(22, 'Net Promoter Score - True Value', metric(10, 0), metric(10, 0)),
+      parameter(23, 'POC Manpower Certification', metric(0, 0), metric(0, 0)),
+      parameter(24, 'End of Life Vehicle Scrap Penetration - ARENA (Bonus Parameter)', metric(0, 0), metric(40, 0), { excludeFromTotals: true }),
+    ]),
+    area('Dealer Financials', [
+      parameter(25, 'Dealer Financial Ratio', metric(0, 0), metric(0, 0)),
+      parameter(26, 'Working Capital Diversion & Inadequacy', metric(0, 0), metric(0, 0)),
     ]),
     area('Dealer Infrastructure', [
-      parameter(18, 'Charging Infrastructure - ARENA (Bonus Parameter)', metric(0, 0), metric(30, 0), { excludeFromTotals: true }),
-      parameter(19, 'Maruti Suzuki Driving School', metric(0, -10), metric(0, -10)),
+      parameter(27, 'ARENA & TV Infrastructure - Upgradation', metric(0, 0), metric(0, 0)),
+      parameter(28, 'ARENA & TV Infrastructure - Quarterly Maintenance', metric(0, 0), metric(0, 0)),
+      parameter(29, 'Charging Infrastructure (Bonus Parameter)', metric(0, 0), metric(30, 0), { excludeFromTotals: true }),
+      parameter(30, 'Maruti Suzuki Driving School', metric(0, -10), metric(0, -10)),
+      parameter(31, 'Adequate Insurance Coverage & Preventive Safety Audit', metric(0, 0), metric(0, 0)),
     ]),
   ],
 });

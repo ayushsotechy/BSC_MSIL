@@ -45,8 +45,8 @@ const bscService = {
 
   return data;
 },
-bulkSaveScores: async (scores) => {
-  const { data } = await api.post('/bsc/bulk-save', { scores });
+bulkSaveScores: async (scores, options = {}) => {
+  const { data } = await api.post('/bsc/bulk-save', { scores, ...options });
   return data;
 },
 };

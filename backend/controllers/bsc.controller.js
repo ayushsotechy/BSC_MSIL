@@ -1,6 +1,6 @@
 const XLSX = require('xlsx');
 const BscScore = require('../models/BscScore.model');
-const { parseBscWorkbook } = require('../utils/bscExcelParser');
+const { parseBscWorkbookWithMetadata } = require('../utils/bscExcelParser');
 
 const metricValue = (metric, key) => {
   if (metric && typeof metric === 'object') {
@@ -21,24 +21,30 @@ const normalizeMetric = (metric = {}) => ({
   achieved: toNumber(metricValue(metric, 'achieved')),
 });
 
-const metricTotal = (area, period) => {
+const metricTotal = (area, period, key = 'achieved') => {
+  const total = area?.[`${period}Total`];
+  if (total && typeof total === 'object') return toNumber(metricValue(total, key));
+  if (key === 'achieved' && total !== undefined && total !== null && total !== '') {
+    return toNumber(total);
+  }
+
   const parameters = area?.parameters || [];
 
   if (parameters.length) {
     return parameters.reduce(
-      (sum, param) => sum + (param?.excludeFromTotals ? 0 : toNumber(metricValue(param?.[period], 'achieved'))),
+      (sum, param) => sum + (param?.excludeFromTotals ? 0 : toNumber(metricValue(param?.[period], key))),
       0
     );
   }
 
-  const total = area?.[`${period}Total`];
-  if (total && typeof total === 'object') return toNumber(metricValue(total, 'achieved'));
-  if (total !== undefined && total !== null) {
-    return toNumber(total);
-  }
-
   return 0;
 };
+
+const normalizeTotalMetric = (area, period) => ({
+  maxPoints: metricTotal(area, period, 'maxPoints'),
+  minPoints: metricTotal(area, period, 'minPoints'),
+  achieved: metricTotal(area, period, 'achieved'),
+});
 
 const getBand = (score) => score?.fullYear?.band || score?.earlyBird?.band || 'NO BAND';
 
@@ -91,6 +97,8 @@ const withScoreMetadata = async (payload, options = {}) => ({
   ...payload,
   previousYearBand: payload.previousYearBand && payload.previousYearBand !== 'N/A'
     ? payload.previousYearBand
+    : options.skipPreviousLookup
+      ? 'N/A'
     : await findPreviousYearBand({
       dealerCode: payload.dealerCode,
       fiscalYear: payload.fiscalYear,
@@ -112,18 +120,20 @@ const normalizeBscPayload = (payload) => {
       provisionalScore: payload?.earlyBird?.provisionalScore || '',
       provisionalScorePercent: payload?.earlyBird?.provisionalScorePercent || '',
       qualification: payload?.earlyBird?.qualification || 'N',
+      total: payload?.earlyBird?.total,
       band: payload?.earlyBird?.band || '',
     },
     fullYear: {
       provisionalScore: payload?.fullYear?.provisionalScore || '',
       provisionalScorePercent: payload?.fullYear?.provisionalScorePercent || '',
       qualification: payload?.fullYear?.qualification || 'N',
+      total: payload?.fullYear?.total,
       band: payload?.fullYear?.band || '',
     },
     businessAreas: (payload?.businessAreas || []).map((area) => ({
       areaName: area?.areaName || '',
-      earlyBirdTotal: metricTotal(area, 'earlyBird'),
-      fullYearTotal: metricTotal(area, 'fullYear'),
+      earlyBirdTotal: normalizeTotalMetric(area, 'earlyBird'),
+      fullYearTotal: normalizeTotalMetric(area, 'fullYear'),
       parameters: (area?.parameters || []).map((param) => ({
         sNo: param?.sNo,
         parameter: param?.parameter || param?.name || '',
@@ -169,7 +179,13 @@ const getBscScore = async (req, res, next) => {
     if (month) query.month = month;
     if (fiscalYear) query.fiscalYear = fiscalYear;
 
-    const scores = await BscScore.find(query).sort({ createdAt: -1 });
+    const shouldReturnSummary = ['1', 'true', 'yes'].includes(String(req.query.summary || '').toLowerCase());
+    const scoreQuery = BscScore.find(query).sort({ createdAt: -1 });
+    if (shouldReturnSummary) {
+      scoreQuery.select('-businessAreas');
+    }
+
+    const scores = await scoreQuery;
 
     res.json({ success: true, count: scores.length, data: scores });
   } catch (error) {
@@ -269,20 +285,16 @@ const downloadScoreSheet = async (req, res, next) => {
           param.fullYear.achieved,
         ]);
       });
-      const sumMetric = (period, key) => area.parameters.reduce(
-        (sum, param) => sum + (param.excludeFromTotals ? 0 : toNumber(metricValue(param?.[period], key))),
-        0
-      );
       detailRows.push([
         `${area.areaName} Total`,
         '',
         '',
-        sumMetric('earlyBird', 'maxPoints'),
-        sumMetric('earlyBird', 'minPoints'),
-        area.earlyBirdTotal,
-        sumMetric('fullYear', 'maxPoints'),
-        sumMetric('fullYear', 'minPoints'),
-        area.fullYearTotal,
+        metricTotal(area, 'earlyBird', 'maxPoints'),
+        metricTotal(area, 'earlyBird', 'minPoints'),
+        metricTotal(area, 'earlyBird', 'achieved'),
+        metricTotal(area, 'fullYear', 'maxPoints'),
+        metricTotal(area, 'fullYear', 'minPoints'),
+        metricTotal(area, 'fullYear', 'achieved'),
       ]);
       detailRows.push([]); 
     });
@@ -360,17 +372,18 @@ const uploadBscExcel = async (req, res, next) => {
 
     const { fiscalYear, month } = req.body;
 
-    const scores = parseBscWorkbook(req.file.buffer, {
+    const parsed = parseBscWorkbookWithMetadata(req.file.buffer, {
       fiscalYear,
       month,
     });
+    const scores = parsed.scores || [];
 
     if (!scores.length) {
       return res.status(400).json({ message: 'No valid dealer rows found in Excel.' });
     }
 
     const enrichedScores = await Promise.all(
-      scores.map((score) => withScoreMetadata(normalizeBscPayload(score)))
+      scores.map((score) => withScoreMetadata(normalizeBscPayload(score), { skipPreviousLookup: true }))
     );
 
     res.json({
@@ -378,6 +391,7 @@ const uploadBscExcel = async (req, res, next) => {
       message: 'Excel parsed successfully.',
       count: enrichedScores.length,
       data: enrichedScores,
+      accessCredentials: parsed.accessCredentials || [],
     });
   } catch (error) {
     next(error);
@@ -386,39 +400,46 @@ const uploadBscExcel = async (req, res, next) => {
 const bulkSaveBscScores = async (req, res, next) => {
   try {
     const scores = req.body?.scores || [];
+    const shouldUpsert = req.body?.upsert !== false;
 
     if (!Array.isArray(scores) || scores.length === 0) {
       return res.status(400).json({ message: 'No scorecards received for saving.' });
     }
 
-    const savedScores = [];
-    let skippedCount = 0;
+    const payloads = await Promise.all(
+      scores.map((rawScore) => withScoreMetadata(normalizeBscPayload(rawScore), { skipPreviousLookup: true }))
+    );
+    const operations = payloads
+      .filter((payload) => payload.dealerCode && payload.fiscalYear && payload.month)
+      .map((payload) => ({
+        updateOne: {
+          filter: {
+            dealerCode: payload.dealerCode,
+            fiscalYear: payload.fiscalYear,
+            month: payload.month,
+          },
+          update: { $set: payload },
+          upsert: shouldUpsert,
+        },
+      }));
 
-    for (const rawScore of scores) {
-      const payload = await withScoreMetadata(normalizeBscPayload(rawScore));
-
-      const existingScore = await BscScore.findOne({
-        dealerCode: payload.dealerCode,
-        fiscalYear: payload.fiscalYear,
-        month: payload.month,
-      });
-
-      if (existingScore) {
-        skippedCount += 1;
-        continue;
-      }
-
-      const savedScore = await BscScore.create(payload);
-
-      savedScores.push(savedScore);
+    if (!operations.length) {
+      return res.status(400).json({ message: 'No valid scorecards received for saving.' });
     }
+
+    const result = await BscScore.bulkWrite(operations, { ordered: false });
+    const savedCount = (result.upsertedCount || 0) + (result.modifiedCount || 0);
+    const matchedCount = result.matchedCount || 0;
+    const skippedCount = shouldUpsert ? 0 : Math.max(0, operations.length - savedCount);
 
     res.json({
       success: true,
-      message: `${savedScores.length} scorecards saved successfully. ${skippedCount} existing scorecards skipped.`,
-      count: savedScores.length,
+      message: `${savedCount} scorecards saved successfully.`,
+      count: savedCount,
+      matchedCount,
+      upsertedCount: result.upsertedCount || 0,
+      modifiedCount: result.modifiedCount || 0,
       skippedCount,
-      data: savedScores,
     });
   } catch (error) {
     next(error);

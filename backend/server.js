@@ -54,8 +54,8 @@ const limiter = rateLimit({
 app.use('/api/', limiter);
 
 // ─── General Middleware ──────────────────────────────────────────────────────
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: process.env.JSON_BODY_LIMIT || '10mb' }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 // ─── Routes ──────────────────────────────────────────────────────────────────

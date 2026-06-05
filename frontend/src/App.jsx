@@ -42,7 +42,16 @@ function App() {
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </Router>
-      <ToastContainer position="top-right" autoClose={3000} />
+      <ToastContainer
+        position="top-right"
+        autoClose={3200}
+        newestOnTop
+        closeOnClick
+        pauseOnFocusLoss={false}
+        pauseOnHover
+        theme="colored"
+        className="app-toast-container"
+      />
     </AuthProvider>
   );
 }

@@ -22,8 +22,8 @@ const bscParameterSchema = new mongoose.Schema({
 const businessAreaSchema = new mongoose.Schema({
   areaName: { type: String, required: true },
   parameters: [bscParameterSchema],
-  earlyBirdTotal: { type: Number, default: 0 },
-  fullYearTotal: { type: Number, default: 0 },
+  earlyBirdTotal: { type: mongoose.Schema.Types.Mixed, default: 0 },
+  fullYearTotal: { type: mongoose.Schema.Types.Mixed, default: 0 },
 }, { _id: false });
 
 const bscScoreSchema = new mongoose.Schema(
@@ -50,6 +50,7 @@ const bscScoreSchema = new mongoose.Schema(
       provisionalScore: { type: String }, 
       provisionalScorePercent: { type: String },
       qualification: { type: String, enum: ['Y', 'N'], default: 'N' },
+      total: { type: mongoose.Schema.Types.Mixed, default: undefined },
       band: {
         type: String,
         enum: ['PLATINUM', 'GOLD', 'SILVER', 'BRONZE', 'NO BAND', ''],
@@ -60,6 +61,7 @@ const bscScoreSchema = new mongoose.Schema(
       provisionalScore: { type: String },
       provisionalScorePercent: { type: String },
       qualification: { type: String, enum: ['Y', 'N'], default: 'N' },
+      total: { type: mongoose.Schema.Types.Mixed, default: undefined },
       band: {
         type: String,
         enum: ['PLATINUM', 'GOLD', 'SILVER', 'BRONZE', 'NO BAND', ''],

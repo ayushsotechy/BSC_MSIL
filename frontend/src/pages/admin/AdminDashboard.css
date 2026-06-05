@@ -31,9 +31,19 @@
 	flex-wrap: wrap;
 }
 
+.admin-editor-actions--exports {
+	width: 100%;
+	margin-top: 4px;
+}
+
+.admin-editor-actions--primary {
+	width: 100%;
+	margin-top: 12px;
+}
+
 .dealer-main__header--stacked {
 	align-items: flex-start;
-	gap: 14px;
+	gap: 10px;
 }
 
 .admin-action-btn:hover {
@@ -82,6 +92,30 @@
 
 .admin-action-btn--cancel svg {
 	color: #fff0f0;
+}
+
+.admin-action-btn--download {
+	background: #84a8ff;
+	color: #102e77;
+	border: 1px solid rgba(49, 86, 207, 0.42);
+}
+
+.admin-action-btn--review {
+	background: #67dce3;
+	color: #102e77;
+	border: 1px solid rgba(18, 139, 153, 0.28);
+}
+
+.admin-action-btn--azure {
+	background: #e8f1ff;
+	color: #0f3f95;
+	border: 1px solid rgba(49, 112, 224, 0.35);
+}
+
+.admin-action-btn--download svg,
+.admin-action-btn--review svg,
+.admin-action-btn--azure svg {
+	color: #102e77;
 }
 
 .admin-upload-modal {
@@ -285,6 +319,34 @@
 	box-shadow: 0 8px 16px rgba(49, 86, 207, 0.22);
 }
 
+.admin-access-search {
+	display: grid;
+	grid-template-columns: minmax(160px, 220px) minmax(260px, 420px);
+	align-items: center;
+	gap: 12px;
+	margin: 0 0 16px;
+	color: #213462;
+	font-size: 14px;
+	font-weight: 800;
+}
+
+.admin-access-search input {
+	min-height: 42px;
+	border: 1px solid rgba(94, 132, 236, 0.42);
+	border-radius: 999px;
+	background: rgba(255, 255, 255, 0.92);
+	padding: 0 18px;
+	color: #1f315f;
+	font: inherit;
+	font-weight: 600;
+	outline: none;
+}
+
+.admin-access-search input:focus {
+	border-color: #3156cf;
+	box-shadow: 0 0 0 3px rgba(49, 86, 207, 0.12);
+}
+
 .admin-pagination {
 	display: flex;
 	align-items: center;
@@ -398,6 +460,38 @@ select.admin-access-input {
 
 .admin-access-row-btn:disabled {
 	opacity: 0.7;
+	cursor: not-allowed;
+}
+
+.admin-row-actions {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+}
+
+.admin-row-delete-btn,
+.admin-control-remove-btn {
+	width: 32px;
+	height: 32px;
+	border: none;
+	border-radius: 999px;
+	background: #dc2626;
+	color: #ffffff;
+	font: inherit;
+	font-size: 22px;
+	font-weight: 900;
+	line-height: 1;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	box-shadow: 0 6px 12px rgba(220, 38, 38, 0.18);
+}
+
+.admin-row-delete-btn:disabled,
+.admin-control-remove-btn:disabled {
+	opacity: 0.6;
 	cursor: not-allowed;
 }
 
@@ -524,6 +618,7 @@ select.admin-access-input {
 	padding: 8px 12px;
 	display: flex;
 	align-items: center;
+	gap: 8px;
 	color: #10244e;
 	font-size: 18px;
 	font-weight: 700;

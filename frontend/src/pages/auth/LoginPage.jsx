@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
+import marutiLogo from '../../assets/maruti-logoo.png';
+import poweredByDeLogo from '../../assets/Powered By DE black.png';
 import './LoginPage.css';
 
 const LoginPage = () => {
@@ -39,15 +41,10 @@ const LoginPage = () => {
       {/* Header Navbar */}
       <nav className="login-navbar">
         <div className="login-navbar__logo">
-          <svg className="login-navbar__logo-icon" viewBox="0 0 40 40" fill="none">
-            <polygon points="20,4 36,36 4,36" fill="none" stroke="#003087" strokeWidth="2.5" />
-            <polyline points="14,28 20,16 26,28" fill="none" stroke="#003087" strokeWidth="2" />
-          </svg>
-          <span className="login-navbar__logo-text">MARUTI SUZUKI</span>
+          <img className="login-navbar__logo-img" src={marutiLogo} alt="Maruti Suzuki" />
         </div>
         <div className="login-navbar__right">
-          <span className="login-navbar__powered">Powered by DE</span>
-          <span className="login-navbar__chevron">»</span>
+          <img className="login-navbar__powered-logo" src={poweredByDeLogo} alt="Powered by DE" />
           <button className="login-navbar__icon-btn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
