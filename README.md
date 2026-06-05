@@ -1,157 +1,429 @@
-# BSC Portal – Maruti Suzuki
-**Balance Score Card Portal** | MERN Stack | Role-based access (Dealer / MSIL / Admin)
+# BSC Portal - Maruti Suzuki
 
----
+Balance Score Card Portal built with a MERN-style stack: Express/MongoDB on the backend and React on the frontend. The app supports three roles: Dealer, MSIL, and Admin. Each role sees the same core BSC score data through a different workflow.
 
-## 📁 Project Structure
+## What This App Does
 
-```
+The portal manages Balance Score Card data for dealers. Admin users can upload a large Excel score sheet, review parsed dealer records, generate dealer access credentials, save scorecards in bulk, edit access-control data, and view/export score sheets. MSIL users can view dealer score data assigned to them. Dealer users can log in with dealer credentials and view/download their own score sheet.
+
+At a high level, the backend is the source of truth, the Excel parser translates the uploaded workbook into app-ready scorecards, and the frontend is the operating console for role-specific workflows.
+
+## Project Structure
+
+```txt
 bsc-portal/
 ├── backend/
 │   ├── config/
-│   │   └── db.js                    # MongoDB connection
+│   │   └── db.js
 │   ├── controllers/
-│   │   ├── auth.controller.js       # Login, getMe
-│   │   └── bsc.controller.js        # BSC CRUD + Excel download
+│   │   ├── accessControl.controller.js
+│   │   ├── auth.controller.js
+│   │   └── bsc.controller.js
 │   ├── middleware/
-│   │   ├── auth.middleware.js       # JWT protect + authorize(roles)
-│   │   └── error.middleware.js      # Global error handler
+│   │   ├── auth.middleware.js
+│   │   └── error.middleware.js
 │   ├── models/
-│   │   ├── User.model.js            # User (dealer/msil/admin)
-│   │   └── BscScore.model.js        # BSC score sheet data
+│   │   ├── AccessRegion.model.js
+│   │   ├── AccessZone.model.js
+│   │   ├── BscScore.model.js
+│   │   ├── DealerAccessCredential.model.js
+│   │   ├── MsilAccess.model.js
+│   │   └── User.model.js
 │   ├── routes/
+│   │   ├── access-control.routes.js
+│   │   ├── admin.routes.js
 │   │   ├── auth.routes.js
 │   │   ├── bsc.routes.js
 │   │   ├── dealer.routes.js
-│   │   ├── msil.routes.js
-│   │   └── admin.routes.js
-│   ├── .env.example
-│   ├── package.json
+│   │   └── msil.routes.js
+│   ├── utils/
+│   │   └── bscExcelParser.js
 │   └── server.js
 │
 ├── frontend/
 │   ├── public/
 │   │   └── index.html
 │   └── src/
+│       ├── assets/
+│       │   ├── maruti-logoo.png
+│       │   └── Powered By DE black.png
 │       ├── components/
 │       │   ├── common/
-│       │   │   ├── Navbar.jsx / .css
+│       │   │   ├── Navbar.jsx
 │       │   │   └── ProtectedRoute.jsx
 │       │   └── dealer/
-│       │       ├── BscScoreSheet.jsx  # Main score table component
-│       │       └── BscScoreSheet.css
+│       │       └── BscScoreSheet.jsx
 │       ├── context/
-│       │   └── AuthContext.jsx        # Global auth state
+│       │   └── AuthContext.jsx
+│       ├── data/
+│       │   └── vendorBscData.js
 │       ├── pages/
+│       │   ├── admin/
+│       │   │   └── AdminDashboard.jsx
 │       │   ├── auth/
-│       │   │   ├── LoginPage.jsx      # Login UI (black=dealer, blue=msil)
-│       │   │   └── LoginPage.css
-│       │   └── dealer/
-│       │       ├── DealerDashboard.jsx
-│       │       └── DealerDashboard.css
+│       │   │   └── LoginPage.jsx
+│       │   ├── dealer/
+│       │   │   └── DealerDashboard.jsx
+│       │   └── msil/
+│       │       └── MsilDashboard.jsx
 │       ├── services/
-│       │   ├── api.js                 # Axios instance + interceptors
+│       │   ├── accessControl.service.js
+│       │   ├── api.js
 │       │   ├── auth.service.js
-│       │   └── bsc.service.js         # BSC API calls + file download
-│       ├── App.jsx                    # Routes
-│       ├── index.js
-│       └── index.css
+│       │   └── bsc.service.js
+│       ├── App.jsx
+│       ├── index.css
+│       └── index.js
 │
-├── package.json                       # Root scripts (concurrently)
+├── package.json
 └── README.md
 ```
 
----
+## Setup
 
-## 🚀 Setup & Run
+Install dependencies from the root:
 
-### 1. Clone & install
 ```bash
-git clone <repo>
-cd bsc-portal
 npm run install:all
 ```
 
-### 2. Configure environment
+Create a backend environment file:
+
 ```bash
 cd backend
 cp .env.example .env
-# Edit .env:
-#   MONGO_URI=mongodb://localhost:27017/bsc_portal
-#   JWT_SECRET=your_secret_here
-#   NODE_ENV=development
 ```
 
-### 3. Run (both servers)
+Typical backend `.env` values:
+
+```env
+PORT=5001
+MONGO_URI=mongodb://localhost:27017/bsc_portal
+JWT_SECRET=replace_with_a_secret
+NODE_ENV=development
+JSON_BODY_LIMIT=10mb
+CORS_ORIGIN=http://localhost:3000
+```
+
+Run both servers from the root:
+
 ```bash
-# From root
 npm run dev
 ```
-- Backend: http://localhost:5000
-- Frontend: http://localhost:3000
 
----
+Frontend runs on:
 
-## 🔐 Authentication & Roles
+```txt
+http://localhost:3000
+```
 
-| Button Color | Role   | Route after login       |
-|-------------|--------|-------------------------|
-| **Black**   | Dealer | `/dealer/dashboard`     |
-| **Blue**    | MSIL   | `/msil/dashboard`       |
-| Text link   | Admin  | `/admin/dashboard`      |
+Backend runs on the configured `PORT`, currently expected by the frontend proxy as:
 
-JWT token stored in `localStorage` as `bsc_token`.
+```txt
+http://localhost:5001
+```
 
----
+## Scripts
 
-## 📊 API Endpoints
+Root:
 
-### Auth
-| Method | Endpoint          | Description          |
-|--------|-------------------|----------------------|
-| POST   | `/api/auth/login` | Login (all roles)    |
-| GET    | `/api/auth/me`    | Get current user     |
+```bash
+npm run dev          # Run backend and frontend together
+npm run server       # Run backend only
+npm run client       # Run frontend only
+npm run install:all  # Install root, backend, and frontend dependencies
+```
 
-### BSC Scores
-| Method | Endpoint                       | Access            |
-|--------|--------------------------------|-------------------|
-| GET    | `/api/bsc/score`               | All (role-scoped) |
-| GET    | `/api/bsc/score/:id`           | All               |
-| GET    | `/api/bsc/score/:id/download`  | All — returns .xlsx |
-| POST   | `/api/bsc/score`               | MSIL, Admin       |
-| PUT    | `/api/bsc/score/:id`           | MSIL, Admin       |
+Backend:
 
-### Admin
-| Method | Endpoint                       | Description        |
-|--------|--------------------------------|--------------------|
-| GET    | `/api/admin/users`             | List all users     |
-| POST   | `/api/admin/users`             | Create user        |
-| PATCH  | `/api/admin/users/:id/toggle`  | Toggle active      |
+```bash
+npm run dev
+npm start
+```
 
----
+Frontend:
 
-## 📥 Score Sheet Download
+```bash
+npm start
+npm run build
+```
 
-The `/api/bsc/score/:id/download` endpoint generates an Excel `.xlsx` file with:
-- **Sheet 1 – Summary**: Region, Dealer Name, Early Bird & Full Year scores/bands
-- **Sheet 2 – Score Sheet**: Full parameter breakdown per Business Area
+## Role Flow
 
-Uses the `xlsx` npm package server-side. Frontend triggers a blob download via `triggerDownload()` in `bsc.service.js`.
+Login happens through `frontend/src/context/AuthContext.jsx`. The UI calls the login function with a requested role. The app then redirects to the correct route:
 
----
+```txt
+Dealer -> /dealer/dashboard
+MSIL   -> /msil/dashboard
+Admin  -> /admin/dashboard
+```
 
-## 🗃️ Seed Data (optional)
+Dealer and MSIL credentials are managed through the access-control system, not only the legacy user model. Admin login currently follows the admin logic inside the auth context/backend auth flow.
 
-```js
-// Run in MongoDB shell or create a seed script
-db.users.insertOne({
-  username: "sanvit001",
-  email: "sanvit@dealer.com",
-  password: "<bcrypt hash of 'password123'>",
-  role: "dealer",
-  dealerCode: "DL001",
-  dealerName: "Sanvit Automotives",
-  region: "South 2",
-  isActive: true
-})
+## Backend Flow
+
+`backend/server.js` configures Express middleware, CORS, request limits, API routes, error handling, and the MongoDB connection. Backend routes are grouped by feature:
+
+```txt
+/api/auth
+/api/dealer
+/api/msil
+/api/admin
+/api/bsc
+/api/access-control
+```
+
+The main backend responsibilities are:
+
+- Validate and route API requests.
+- Query and update MongoDB through Mongoose models.
+- Parse uploaded Excel score sheets.
+- Save BSC scorecards and access credentials.
+- Provide summary and detail score data to the frontend.
+- Generate server-side Excel downloads for legacy score-sheet export.
+
+## Core Backend Models
+
+`BscScore.model.js`
+
+Stores dealer score sheets. Each score contains dealer metadata, early-bird summary, full-year summary, business areas, parameters, subtotal objects, and editable root totals.
+
+`DealerAccessCredential.model.js`
+
+Stores dealer login/access information: dealer code, dealer name, mail ID, password, zone, region, assigned MSIL persons, and `isActive`.
+
+`MsilAccess.model.js`
+
+Stores MSIL login/access entries. Deleting an MSIL person is implemented as a soft delete using `isActive: false`.
+
+`AccessZone.model.js` and `AccessRegion.model.js`
+
+Store the selectable zone and region lists used by filters and dealer credentials.
+
+## Access Control Logic
+
+Access-control APIs are implemented in:
+
+```txt
+backend/controllers/accessControl.controller.js
+backend/routes/access-control.routes.js
+frontend/src/services/accessControl.service.js
+```
+
+The admin can:
+
+- Add/edit/delete zones.
+- Add/edit/delete regions.
+- Add/edit/delete MSIL people.
+- Add/edit/delete dealer credentials.
+- Assign one or more MSIL people to a dealer.
+
+Delete behavior:
+
+- Zone delete removes the zone and clears that zone from dealer credentials.
+- Region delete removes the region and clears that region from dealer credentials.
+- MSIL delete sets `isActive: false` and removes that MSIL person from dealer assignments.
+- Dealer credential delete sets `isActive: false`.
+
+## BSC Score Logic
+
+BSC APIs are implemented in:
+
+```txt
+backend/controllers/bsc.controller.js
+backend/routes/bsc.routes.js
+frontend/src/services/bsc.service.js
+```
+
+Important endpoints:
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| GET | `/api/bsc/score` | List BSC scores. Supports summary mode. |
+| GET | `/api/bsc/score/:id` | Fetch full score details. |
+| POST | `/api/bsc/score` | Create score. |
+| PUT | `/api/bsc/score/:id` | Update score. |
+| POST | `/api/bsc/upload-excel` | Upload and parse admin Excel score sheet. |
+| POST | `/api/bsc/bulk-save` | Bulk-save parsed scorecards. |
+| GET | `/api/bsc/score/:id/download` | Backend Excel download. |
+
+The frontend uses summary loading for the master list and only fetches full score detail when the user opens View/Edit. This keeps the list faster because full score sheets are large nested documents.
+
+## Excel Upload Flow
+
+The Excel parser is:
+
+```txt
+backend/utils/bscExcelParser.js
+```
+
+Admin uploads the large BSC scoresheet from the Admin dashboard. The backend parser reads both the Full Year and Early Bird sheets and maps the transposed Excel layout into the app table layout.
+
+Current workbook mapping:
+
+- Dealer metadata comes from the left-side columns.
+- Parameter achieved values map into app table parameter rows.
+- Major-row totals map into subtotal rows.
+- Max/min values map into early-bird and full-year columns.
+- Top score/band/qualification fields map into the score summary area.
+- Dealer access credentials are generated during parse review.
+
+Current admin upload/save flow:
+
+```txt
+1. Admin uploads Excel.
+2. Backend parses workbook.
+3. Frontend receives parsed scorecards and generated credentials.
+4. Admin reviews preview.
+5. Admin clicks Save All Dealers.
+6. Frontend saves access credentials and scorecards in batches.
+7. Backend writes data to MongoDB.
+```
+
+For very large uploads, the best future design is a backend import job:
+
+```txt
+Upload file -> create jobId -> backend parses/saves in background -> frontend polls progress
+```
+
+This would reduce browser waiting, payload size, and timeout risk.
+
+## Frontend Flow
+
+Routes are defined in:
+
+```txt
+frontend/src/App.jsx
+```
+
+API calls are centralized in:
+
+```txt
+frontend/src/services/api.js
+frontend/src/services/bsc.service.js
+frontend/src/services/accessControl.service.js
+```
+
+`api.js` creates the Axios instance and attaches common behavior. Service files wrap API calls so UI components do not directly manage endpoint strings everywhere.
+
+## Main Frontend Screens
+
+`LoginPage.jsx`
+
+Role-based login screen. Uses the Maruti Suzuki and Powered by DE assets.
+
+`DealerDashboard.jsx`
+
+Loads the logged-in dealer score data, displays the BSC score sheet, and supports score-sheet/review-sheet actions.
+
+`MsilDashboard.jsx`
+
+Displays dealer data visible to the MSIL user.
+
+`AdminDashboard.jsx`
+
+The main admin control room. It handles:
+
+- BSC master table.
+- NSC view.
+- Excel upload.
+- Parsed Excel preview.
+- Bulk save.
+- Scorecard View/Edit.
+- Score Sheet PDF export.
+- Review Sheet export.
+- Azure Documents placeholder button.
+- Access Credentials page.
+- Access Control page.
+
+`BscScoreSheet.jsx`
+
+Shared score-sheet renderer used by dealer/admin flows. It renders:
+
+- Top dealer/score summary.
+- Early Bird and Full Year evaluation columns.
+- Parameter rows.
+- Editable achieved values.
+- Editable subtotals.
+- Editable grand totals.
+- Final note block.
+
+The top identity fields are intentionally read-only in edit mode. Only the configured score summary fields, parameter achieved values, subtotals, and grand totals are editable.
+
+## Downloads and Exports
+
+The admin/dealer score-sheet button currently generates a PDF on the frontend using:
+
+```txt
+jspdf
+jspdf-autotable
+```
+
+The backend still has an Excel `.xlsx` download endpoint for score sheets:
+
+```txt
+GET /api/bsc/score/:id/download
+```
+
+Review-sheet export is currently handled from the frontend. An Azure Documents placeholder button exists in the Admin BSC master view. Later, this can open Azure-hosted review-sheet documents using dealer code as the unique key.
+
+## Notifications
+
+The frontend uses `react-toastify` for notifications. Browser `alert()` calls have been replaced with toast notifications. The global toast container is configured in:
+
+```txt
+frontend/src/App.jsx
+```
+
+Toast styling lives in:
+
+```txt
+frontend/src/index.css
+```
+
+## Important Performance Notes
+
+The BSC score documents are large because each dealer contains a complete nested score sheet. For large uploads of 350+ dealers:
+
+- MongoDB Atlas free tier can be slow because it has limited shared resources.
+- Avoid returning full score documents for table lists.
+- Use summary mode for master tables.
+- Fetch full score details only when opening View/Edit.
+- Prefer backend bulk writes for large saves.
+- A background import-job design would be better for production-scale uploads.
+
+Useful future improvements:
+
+- Backend-side import jobs with progress polling.
+- Store uploaded workbook and parse/save server-side.
+- Keep separate score summary and score detail collections.
+- Add/verify indexes for dealer code, year, month, zone, and region.
+- Avoid sending giant parsed score payloads back and forth through the browser.
+
+## Data Persistence Notes
+
+- Scorecard edits persist through `PUT /api/bsc/score/:id`.
+- Access-control edits persist through `/api/access-control` endpoints.
+- Zone/region deletes are hard deletes and also clear references from dealer credentials.
+- MSIL/dealer credential deletes are soft deletes using `isActive: false`.
+- Defaults for zones/regions are seeded only when the respective collection is empty, so deleted default entries do not keep reappearing.
+
+## Development Tips
+
+- Run `npm run build` in `frontend/` after UI changes.
+- Run `node --check <file>` for backend syntax checks after controller/route/model edits.
+- Keep backend data shape and frontend normalizers in sync when adding fields.
+- Be careful with large JSON payloads; backend body limit is controlled by `JSON_BODY_LIMIT`.
+- The frontend proxy points to `http://localhost:5001`, so keep backend `PORT=5001` unless you also update the proxy.
+
+## Quick Verification Commands
+
+```bash
+cd backend
+node --check server.js
+node --check controllers/bsc.controller.js
+node --check controllers/accessControl.controller.js
+
+cd ../frontend
+npm run build
 ```
