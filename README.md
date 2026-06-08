@@ -1,12 +1,12 @@
 # BSC Portal - Maruti Suzuki
 
-Balance Score Card Portal built with a MERN-style stack: Express/MongoDB on the backend and React on the frontend. The app supports three roles: Dealer, MSIL, and Admin. Each role sees the same core BSC score data through a different workflow.
+Balance Score Card Portal with an Express/MongoDB backend and a vanilla HTML, CSS, and JavaScript frontend. The app supports three roles: Dealer, MSIL, and Admin. Each role sees the same core BSC score data through a different workflow.
 
 ## What This App Does
 
 The portal manages Balance Score Card data for dealers. Admin users can upload a large Excel score sheet, review parsed dealer records, generate dealer access credentials, save scorecards in bulk, edit access-control data, and view/export score sheets. MSIL users can view dealer score data assigned to them. Dealer users can log in with dealer credentials and view/download their own score sheet.
 
-At a high level, the backend is the source of truth, the Excel parser translates the uploaded workbook into app-ready scorecards, and the frontend is the operating console for role-specific workflows.
+At a high level, the backend is the source of truth, the Excel parser translates the uploaded workbook into app-ready scorecards, and the vanilla frontend is the operating console for role-specific workflows.
 
 ## Project Structure
 
@@ -14,69 +14,50 @@ At a high level, the backend is the source of truth, the Excel parser translates
 bsc-portal/
 ├── backend/
 │   ├── config/
-│   │   └── db.js
 │   ├── controllers/
-│   │   ├── accessControl.controller.js
-│   │   ├── auth.controller.js
-│   │   └── bsc.controller.js
 │   ├── middleware/
-│   │   ├── auth.middleware.js
-│   │   └── error.middleware.js
 │   ├── models/
-│   │   ├── AccessRegion.model.js
-│   │   ├── AccessZone.model.js
-│   │   ├── BscScore.model.js
-│   │   ├── DealerAccessCredential.model.js
-│   │   ├── MsilAccess.model.js
-│   │   └── User.model.js
 │   ├── routes/
-│   │   ├── access-control.routes.js
-│   │   ├── admin.routes.js
-│   │   ├── auth.routes.js
-│   │   ├── bsc.routes.js
-│   │   ├── dealer.routes.js
-│   │   └── msil.routes.js
 │   ├── utils/
-│   │   └── bscExcelParser.js
 │   └── server.js
-│
 ├── frontend/
 │   ├── public/
-│   │   └── index.html
+│   │   ├── index.html              # CRA shell for legacy route redirects
+│   │   └── vanilla/                # Static production UI served at /vanilla
+│   │       ├── README.md
+│   │       ├── index.html          # /vanilla login
+│   │       ├── assets/             # Shared image assets
+│   │       ├── shared/             # Shared CSS
+│   │       ├── auth/               # Login page behavior
+│   │       ├── admin/              # Admin dashboard and score editor/viewer
+│   │       ├── dealer/             # Dealer dashboard
+│   │       └── msil/               # MSIL dashboard
 │   └── src/
-│       ├── assets/
-│       │   ├── maruti-logoo.png
-│       │   └── Powered By DE black.png
-│       ├── components/
-│       │   ├── common/
-│       │   │   ├── Navbar.jsx
-│       │   │   └── ProtectedRoute.jsx
-│       │   └── dealer/
-│       │       └── BscScoreSheet.jsx
-│       ├── context/
-│       │   └── AuthContext.jsx
-│       ├── data/
-│       │   └── vendorBscData.js
-│       ├── pages/
-│       │   ├── admin/
-│       │   │   └── AdminDashboard.jsx
-│       │   ├── auth/
-│       │   │   └── LoginPage.jsx
-│       │   ├── dealer/
-│       │   │   └── DealerDashboard.jsx
-│       │   └── msil/
-│       │       └── MsilDashboard.jsx
-│       ├── services/
-│       │   ├── accessControl.service.js
-│       │   ├── api.js
-│       │   ├── auth.service.js
-│       │   └── bsc.service.js
-│       ├── App.jsx
-│       ├── index.css
-│       └── index.js
-│
+│       └── index.js                # Thin redirect bundle for old React routes
 ├── package.json
 └── README.md
+```
+
+## Frontend Routes
+
+The vanilla frontend intentionally remains inside `frontend/public/vanilla` because files in `public` are served directly by the frontend server and build output. Keeping this folder preserves the current public URLs:
+
+```txt
+/vanilla/          Login
+/vanilla/admin/    Admin dashboard
+/vanilla/msil/     MSIL dashboard
+/vanilla/dealer/   Dealer dashboard
+```
+
+`frontend/src/index.js` only exists to redirect old React-era routes to the new vanilla URLs:
+
+```txt
+/login                    -> /vanilla/
+/admin/dashboard          -> /vanilla/admin/
+/admin/access-credentials -> /vanilla/admin/
+/msil/dashboard           -> /vanilla/msil/
+/msil/access-credentials  -> /vanilla/msil/
+/dealer/dashboard         -> /vanilla/dealer/
 ```
 
 ## Setup
@@ -111,17 +92,7 @@ Run both servers from the root:
 npm run dev
 ```
 
-Frontend runs on:
-
-```txt
-http://localhost:3000
-```
-
-Backend runs on the configured `PORT`, currently expected by the frontend proxy as:
-
-```txt
-http://localhost:5001
-```
+Frontend runs on `http://localhost:3000`. Backend runs on the configured `PORT`, currently expected by the frontend proxy as `http://localhost:5001`.
 
 ## Scripts
 
@@ -148,18 +119,6 @@ npm start
 npm run build
 ```
 
-## Role Flow
-
-Login happens through `frontend/src/context/AuthContext.jsx`. The UI calls the login function with a requested role. The app then redirects to the correct route:
-
-```txt
-Dealer -> /dealer/dashboard
-MSIL   -> /msil/dashboard
-Admin  -> /admin/dashboard
-```
-
-Dealer and MSIL credentials are managed through the access-control system, not only the legacy user model. Admin login currently follows the admin logic inside the auth context/backend auth flow.
-
 ## Backend Flow
 
 `backend/server.js` configures Express middleware, CORS, request limits, API routes, error handling, and the MongoDB connection. Backend routes are grouped by feature:
@@ -184,56 +143,15 @@ The main backend responsibilities are:
 
 ## Core Backend Models
 
-`BscScore.model.js`
+`BscScore.model.js` stores dealer score sheets. Each score contains dealer metadata, early-bird summary, full-year summary, business areas, parameters, subtotal objects, and editable root totals.
 
-Stores dealer score sheets. Each score contains dealer metadata, early-bird summary, full-year summary, business areas, parameters, subtotal objects, and editable root totals.
+`DealerAccessCredential.model.js` stores dealer login/access information: dealer code, dealer name, mail ID, password, zone, region, assigned MSIL persons, and `isActive`.
 
-`DealerAccessCredential.model.js`
+`MsilAccess.model.js` stores MSIL login/access entries. Deleting an MSIL person is implemented as a soft delete using `isActive: false`.
 
-Stores dealer login/access information: dealer code, dealer name, mail ID, password, zone, region, assigned MSIL persons, and `isActive`.
-
-`MsilAccess.model.js`
-
-Stores MSIL login/access entries. Deleting an MSIL person is implemented as a soft delete using `isActive: false`.
-
-`AccessZone.model.js` and `AccessRegion.model.js`
-
-Store the selectable zone and region lists used by filters and dealer credentials.
-
-## Access Control Logic
-
-Access-control APIs are implemented in:
-
-```txt
-backend/controllers/accessControl.controller.js
-backend/routes/access-control.routes.js
-frontend/src/services/accessControl.service.js
-```
-
-The admin can:
-
-- Add/edit/delete zones.
-- Add/edit/delete regions.
-- Add/edit/delete MSIL people.
-- Add/edit/delete dealer credentials.
-- Assign one or more MSIL people to a dealer.
-
-Delete behavior:
-
-- Zone delete removes the zone and clears that zone from dealer credentials.
-- Region delete removes the region and clears that region from dealer credentials.
-- MSIL delete sets `isActive: false` and removes that MSIL person from dealer assignments.
-- Dealer credential delete sets `isActive: false`.
+`AccessZone.model.js` and `AccessRegion.model.js` store the selectable zone and region lists used by filters and dealer credentials.
 
 ## BSC Score Logic
-
-BSC APIs are implemented in:
-
-```txt
-backend/controllers/bsc.controller.js
-backend/routes/bsc.routes.js
-frontend/src/services/bsc.service.js
-```
 
 Important endpoints:
 
@@ -251,22 +169,7 @@ The frontend uses summary loading for the master list and only fetches full scor
 
 ## Excel Upload Flow
 
-The Excel parser is:
-
-```txt
-backend/utils/bscExcelParser.js
-```
-
-Admin uploads the large BSC scoresheet from the Admin dashboard. The backend parser reads both the Full Year and Early Bird sheets and maps the transposed Excel layout into the app table layout.
-
-Current workbook mapping:
-
-- Dealer metadata comes from the left-side columns.
-- Parameter achieved values map into app table parameter rows.
-- Major-row totals map into subtotal rows.
-- Max/min values map into early-bird and full-year columns.
-- Top score/band/qualification fields map into the score summary area.
-- Dealer access credentials are generated during parse review.
+The Excel parser is `backend/utils/bscExcelParser.js`. Admin uploads the large BSC scoresheet from the Admin dashboard. The backend parser reads both the Full Year and Early Bird sheets and maps the transposed Excel layout into the app table layout.
 
 Current admin upload/save flow:
 
@@ -280,125 +183,15 @@ Current admin upload/save flow:
 7. Backend writes data to MongoDB.
 ```
 
-For very large uploads, the best future design is a backend import job:
-
-```txt
-Upload file -> create jobId -> backend parses/saves in background -> frontend polls progress
-```
-
-This would reduce browser waiting, payload size, and timeout risk.
-
-## Frontend Flow
-
-Routes are defined in:
-
-```txt
-frontend/src/App.jsx
-```
-
-API calls are centralized in:
-
-```txt
-frontend/src/services/api.js
-frontend/src/services/bsc.service.js
-frontend/src/services/accessControl.service.js
-```
-
-`api.js` creates the Axios instance and attaches common behavior. Service files wrap API calls so UI components do not directly manage endpoint strings everywhere.
-
-## Main Frontend Screens
-
-`LoginPage.jsx`
-
-Role-based login screen. Uses the Maruti Suzuki and Powered by DE assets.
-
-`DealerDashboard.jsx`
-
-Loads the logged-in dealer score data, displays the BSC score sheet, and supports score-sheet/review-sheet actions.
-
-`MsilDashboard.jsx`
-
-Displays dealer data visible to the MSIL user.
-
-`AdminDashboard.jsx`
-
-The main admin control room. It handles:
-
-- BSC master table.
-- NSC view.
-- Excel upload.
-- Parsed Excel preview.
-- Bulk save.
-- Scorecard View/Edit.
-- Score Sheet PDF export.
-- Review Sheet export.
-- Azure Documents placeholder button.
-- Access Credentials page.
-- Access Control page.
-
-`BscScoreSheet.jsx`
-
-Shared score-sheet renderer used by dealer/admin flows. It renders:
-
-- Top dealer/score summary.
-- Early Bird and Full Year evaluation columns.
-- Parameter rows.
-- Editable achieved values.
-- Editable subtotals.
-- Editable grand totals.
-- Final note block.
-
-The top identity fields are intentionally read-only in edit mode. Only the configured score summary fields, parameter achieved values, subtotals, and grand totals are editable.
-
-## Downloads and Exports
-
-The admin/dealer score-sheet button currently generates a PDF on the frontend using:
-
-```txt
-jspdf
-jspdf-autotable
-```
-
-The backend still has an Excel `.xlsx` download endpoint for score sheets:
-
-```txt
-GET /api/bsc/score/:id/download
-```
-
-Review-sheet export is currently handled from the frontend. An Azure Documents placeholder button exists in the Admin BSC master view. Later, this can open Azure-hosted review-sheet documents using dealer code as the unique key.
-
-## Notifications
-
-The frontend uses `react-toastify` for notifications. Browser `alert()` calls have been replaced with toast notifications. The global toast container is configured in:
-
-```txt
-frontend/src/App.jsx
-```
-
-Toast styling lives in:
-
-```txt
-frontend/src/index.css
-```
-
 ## Important Performance Notes
 
 The BSC score documents are large because each dealer contains a complete nested score sheet. For large uploads of 350+ dealers:
 
-- MongoDB Atlas free tier can be slow because it has limited shared resources.
 - Avoid returning full score documents for table lists.
 - Use summary mode for master tables.
 - Fetch full score details only when opening View/Edit.
 - Prefer backend bulk writes for large saves.
 - A background import-job design would be better for production-scale uploads.
-
-Useful future improvements:
-
-- Backend-side import jobs with progress polling.
-- Store uploaded workbook and parse/save server-side.
-- Keep separate score summary and score detail collections.
-- Add/verify indexes for dealer code, year, month, zone, and region.
-- Avoid sending giant parsed score payloads back and forth through the browser.
 
 ## Data Persistence Notes
 
@@ -410,6 +203,7 @@ Useful future improvements:
 
 ## Development Tips
 
+- Keep static frontend files under `frontend/public/vanilla` unless you also plan a route migration.
 - Run `npm run build` in `frontend/` after UI changes.
 - Run `node --check <file>` for backend syntax checks after controller/route/model edits.
 - Keep backend data shape and frontend normalizers in sync when adding fields.

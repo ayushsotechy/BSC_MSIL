@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MSIL Dashboard | BSC Portal</title>
+    <link rel="stylesheet" href="../shared/styles.css" />
+    <link rel="stylesheet" href="../admin/dashboard.css" />
+    <link rel="stylesheet" href="./dashboard.css" />
+  </head>
+  <body>
+    <div class="dashboard-page">
+      <nav class="app-navbar dashboard-navbar">
+        <div class="app-navbar__brand" aria-label="Maruti Suzuki">
+          <img class="app-navbar__brand-mark" src="../assets/maruti-logoo.png" alt="Maruti Suzuki" />
+        </div>
+
+        <div class="app-navbar__right">
+          <img class="app-navbar__powered-logo" src="../assets/Powered_By_DE_black.png" alt="Powered by DE" />
+          <button class="app-navbar__icon-btn" type="button" aria-label="Notifications">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+          </button>
+          <button class="app-navbar__icon-btn" type="button" aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="5" r="1" fill="currentColor"></circle>
+              <circle cx="12" cy="12" r="1" fill="currentColor"></circle>
+              <circle cx="12" cy="19" r="1" fill="currentColor"></circle>
+            </svg>
+          </button>
+          <button id="logout-button" class="app-navbar__user app-navbar__user--button" type="button" title="Click to logout">
+            <span class="app-navbar__avatar" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2a5 5 0 1 1 0 10A5 5 0 0 1 12 2zm0 12c5.33 0 8 2.67 8 4v2H4v-2c0-1.33 2.67-4 8-4z"></path>
+              </svg>
+            </span>
+            <span class="app-navbar__user-info">
+              <span id="navbar-user-name" class="app-navbar__user-name">MSIL</span>
+              <span id="navbar-user-code" class="app-navbar__user-code">MSIL</span>
+            </span>
+          </button>
+        </div>
+      </nav>
+
+      <div class="dashboard-shell">
+        <aside class="dashboard-sidebar" aria-label="MSIL navigation">
+          <button class="sidebar-item sidebar-item--active" type="button" data-section="bsc">
+            <span class="sidebar-item__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.54.54l2-2a5 5 0 0 0-7.07-7.07l-1.14 1.14"></path>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-2 2a5 5 0 0 0 7.07 7.07l1.14-1.14"></path>
+              </svg>
+            </span>
+            <span>View BSC</span>
+          </button>
+          <button class="sidebar-item" type="button" data-section="nsc">
+            <span class="sidebar-item__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 12h3l3-9 4 18 3-9h5"></path>
+                <path d="M7 20h10"></path>
+              </svg>
+            </span>
+            <span>View NSC</span>
+          </button>
+          <button id="back-button" class="sidebar-back" type="button">
+            <span class="sidebar-back__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 12H5"></path>
+                <path d="m12 19-7-7 7-7"></path>
+              </svg>
+            </span>
+            <span>Back</span>
+          </button>
+        </aside>
+
+        <main class="dashboard-main">
+          <header class="dashboard-main__header">
+            <h1 id="msil-page-title">View BSC Master Data</h1>
+          </header>
+
+          <section id="master-panel" class="admin-panel">
+            <section class="filter-panel" aria-label="MSIL BSC filters">
+              <label>
+                <span>Zone</span>
+                <select id="zone-filter">
+                  <option value="">All Zones</option>
+                </select>
+              </label>
+              <label>
+                <span>Region</span>
+                <select id="region-filter">
+                  <option value="">All Regions</option>
+                </select>
+              </label>
+              <label>
+                <span>Dealer Code / Name</span>
+                <input id="dealer-filter" type="search" autocomplete="off" />
+              </label>
+              <label>
+                <span>Month</span>
+                <select id="month-filter">
+                  <option value="">All Months</option>
+                </select>
+              </label>
+              <label>
+                <span>Year</span>
+                <select id="year-filter">
+                  <option value="">All Years</option>
+                </select>
+              </label>
+            </section>
+
+            <section class="table-card" aria-live="polite">
+              <div id="table-loading" class="table-state">Loading assigned dealer data...</div>
+              <table id="bsc-table" class="dashboard-table" hidden>
+                <thead>
+                  <tr>
+                    <th>Sl No.</th>
+                    <th>Zone</th>
+                    <th>Region</th>
+                    <th>Dealer Parent</th>
+                    <th>Month</th>
+                    <th>Year</th>
+                    <th>Last Year Band</th>
+                    <th>Current Year Band</th>
+                    <th>Year Score</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="bsc-table-body"></tbody>
+              </table>
+            </section>
+
+            <footer class="table-footer">
+              <p id="table-count">Showing 0-0 of 0 dealers</p>
+              <div id="pagination" class="pagination" aria-label="MSIL dealer pagination"></div>
+            </footer>
+          </section>
+
+          <section id="credentials-panel" class="admin-panel" hidden>
+            <div class="access-toolbar msil-credential-toolbar">
+              <div class="access-toolbar__actions">
+                <input id="credential-search" type="search" placeholder="Search dealer code" autocomplete="off" />
+              </div>
+            </div>
+            <div class="table-card access-table-card">
+              <table class="dashboard-table access-table">
+                <thead>
+                  <tr>
+                    <th>Sl No.</th>
+                    <th>Dealer Code</th>
+                    <th>Mail ID</th>
+                    <th>Password</th>
+                    <th>Zone</th>
+                    <th>Region</th>
+                    <th>MSIL Person</th>
+                  </tr>
+                </thead>
+                <tbody id="credentials-table-body"></tbody>
+              </table>
+            </div>
+            <footer class="table-footer">
+              <p id="credentials-table-count">Showing 0-0 of 0 dealers</p>
+              <div id="credentials-pagination" class="pagination" aria-label="MSIL credential pagination"></div>
+            </footer>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+    <script src="./dashboard.js"></script>
+  </body>
+</html>

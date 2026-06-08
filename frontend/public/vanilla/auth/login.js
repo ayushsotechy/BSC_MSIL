@@ -7,8 +7,8 @@
 
   const dashboardByRole = {
     admin: '/vanilla/admin/',
-    dealer: '/dealer/dashboard',
-    msil: '/msil/dashboard',
+    dealer: '/vanilla/dealer/',
+    msil: '/vanilla/msil/',
   };
 
   function showToast(message, type) {

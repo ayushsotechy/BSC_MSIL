@@ -1,12 +1,13 @@
 (function () {
   const API_BASE_URL = window.BSC_API_BASE_URL || 'http://localhost:5001/api';
-  const params = new URLSearchParams(window.location.search);
-  const scoreId = params.get('id');
-  const requestedMode = params.get('mode') === 'edit' ? 'edit' : 'view';
   let mode = 'view';
   let currentUser = null;
   let currentScore = null;
   let activeScoreSection = 'bsc';
+  const MONTHS = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
 
   const MONTH_SHORT_NAMES = {
     january: 'Jan',
@@ -30,8 +31,9 @@
     backButton: document.getElementById('back-button'),
     loading: document.getElementById('score-loading'),
     content: document.getElementById('score-content'),
-    pageTitle: document.getElementById('score-page-title'),
-    editButton: document.getElementById('edit-button'),
+    pageTitle: document.getElementById('dealer-page-title'),
+    monthFilter: document.getElementById('month-filter'),
+    yearFilter: document.getElementById('year-filter'),
     scoreSheetButton: document.getElementById('score-sheet-button'),
     reviewSheetButton: document.getElementById('review-sheet-button'),
     toastRegion: document.getElementById('toast-region'),
@@ -45,18 +47,13 @@
     }
   }
 
-  function ensureAuthorized() {
+  function ensureDealer() {
     const user = getStoredUser();
-    if (!user || !['admin', 'msil', 'dealer'].includes(user.role)) {
+    if (!user || user.role !== 'dealer') {
       window.location.replace('/login');
       return null;
     }
     return user;
-  }
-
-  function isDealerAllowedToView(score, user) {
-    if (user?.role !== 'dealer') return true;
-    return String(score?.dealerCode || '').trim() === String(user?.dealerCode || '').trim();
   }
 
   function showToast(message, type) {
@@ -74,21 +71,6 @@
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.message || 'Failed to fetch score sheet.');
-    return data;
-  }
-
-  async function apiPut(path, payload) {
-    const token = localStorage.getItem('bsc_token');
-    const response = await fetch(`${API_BASE_URL}${path}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify(payload),
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.message || 'Failed to save score sheet.');
     return data;
   }
 
@@ -415,22 +397,6 @@
     updateScorePageTitle();
   }
 
-  async function saveScore() {
-    if (!currentScore || currentUser?.role !== 'admin') return;
-    elements.editButton.disabled = true;
-    elements.editButton.textContent = 'Saving...';
-    try {
-      const response = await apiPut(`/bsc/score/${encodeURIComponent(scoreId)}`, currentScore);
-      currentScore = response.data || currentScore;
-      showToast(response.message || 'Score sheet saved successfully.', 'success');
-      window.location.href = `./score.html?id=${encodeURIComponent(scoreId)}&mode=view`;
-    } catch (error) {
-      showToast(error.message || 'Failed to save score sheet.', 'error');
-      elements.editButton.disabled = false;
-      elements.editButton.textContent = 'Save';
-    }
-  }
-
   function bindShellEvents() {
     elements.logoutButton.addEventListener('click', () => {
       localStorage.removeItem('bsc_token');
@@ -439,9 +405,7 @@
       window.location.href = '/login';
     });
     elements.backButton.addEventListener('click', () => {
-      if (currentUser?.role === 'msil') window.location.href = '/vanilla/msil/';
-      else if (currentUser?.role === 'dealer') window.location.href = '/vanilla/dealer/';
-      else window.location.href = '/vanilla/admin/';
+      window.history.length > 1 ? window.history.back() : window.location.assign('/login');
     });
     document.querySelectorAll('[data-score-section]').forEach((button) => {
       button.addEventListener('click', () => {
@@ -451,68 +415,98 @@
     document.querySelectorAll('[data-placeholder]').forEach((button) => {
       button.addEventListener('click', () => showToast('This section will be converted in a later iteration.', 'info'));
     });
-  }
-
-  function configureSidebarForUser(user) {
-    if (user?.role === 'admin') return;
-    document.querySelectorAll('[data-admin-only]').forEach((element) => {
-      element.hidden = true;
+    elements.monthFilter.addEventListener('change', loadDealerScore);
+    elements.yearFilter.addEventListener('input', loadDealerScore);
+    elements.scoreSheetButton.addEventListener('click', () => {
+      if (!currentScore?._id && !currentScore?.id) {
+        showToast('No score sheet is available to download.', 'error');
+        return;
+      }
+      try {
+        window.BscPdfExporter.downloadScoreSheetPdf(currentScore, {
+          sectionLabel: activeScoreSection.toUpperCase(),
+        });
+        showToast('Score sheet PDF download started.', 'success');
+      } catch (error) {
+        showToast(error.message || 'Failed to download score sheet PDF.', 'error');
+      }
+    });
+    elements.reviewSheetButton.addEventListener('click', () => {
+      showToast('Review sheet download will be connected in a later iteration.', 'info');
     });
   }
 
-  async function init() {
-    const user = ensureAuthorized();
-    if (!user) return;
-    currentUser = user;
-    mode = user.role === 'admin' ? requestedMode : 'view';
-    configureSidebarForUser(user);
-    elements.userName.textContent = user.dealerName || user.name || 'Admin';
-    elements.userCode.textContent = user.dealerCode || user.role || 'ADMIN';
-    updateScorePageTitle();
-    bindShellEvents();
+  function setupMonthFilter() {
+    MONTHS.forEach((month) => {
+      const option = document.createElement('option');
+      option.value = month;
+      option.textContent = month;
+      elements.monthFilter.appendChild(option);
+    });
+  }
 
-    if (!scoreId) {
-      elements.loading.textContent = 'Score id is missing.';
+  function setupYearFilter() {
+    const currentYear = new Date().getFullYear();
+    const years = Array.from({ length: 16 }, (_, index) => String(currentYear + 5 - index));
+    years.forEach((year) => {
+      const option = document.createElement('option');
+      option.value = year;
+      option.textContent = year;
+      elements.yearFilter.appendChild(option);
+    });
+  }
+
+  async function loadDealerScore() {
+    if (!currentUser?.dealerCode) {
+      currentScore = null;
+      elements.content.hidden = true;
+      elements.loading.hidden = false;
+      elements.loading.textContent = 'Dealer code is missing for this account.';
       return;
     }
 
+    const query = new URLSearchParams({ dealerCode: currentUser.dealerCode });
+    if (elements.monthFilter.value) query.set('month', elements.monthFilter.value);
+    if (elements.yearFilter.value.trim()) query.set('fiscalYear', elements.yearFilter.value.trim());
+
+    elements.loading.hidden = false;
+    elements.loading.textContent = 'Loading BSC score data...';
+    elements.content.hidden = true;
+
     try {
-      const response = await apiGet(`/bsc/score/${encodeURIComponent(scoreId)}`);
-      currentScore = response.data;
-      if (!isDealerAllowedToView(currentScore, user)) {
-        elements.loading.textContent = 'This score sheet is not assigned to your dealer account.';
-        showToast(elements.loading.textContent, 'error');
+      const response = await apiGet(`/bsc/score?${query.toString()}`);
+      const scores = Array.isArray(response.data) ? response.data : [];
+      currentScore = scores[0] || null;
+      if (!currentScore) {
+        elements.content.hidden = true;
+        elements.loading.hidden = false;
+        elements.loading.textContent = 'No BSC score data available for your account.';
         return;
       }
       renderScore(currentScore);
       elements.loading.hidden = true;
       elements.content.hidden = false;
-      if (user.role === 'admin') {
-        elements.editButton.textContent = mode === 'edit' ? 'Save' : 'Edit';
-        elements.editButton.addEventListener('click', () => {
-          if (mode === 'edit') saveScore();
-          else window.location.href = `./score.html?id=${encodeURIComponent(scoreId)}&mode=edit`;
-        });
-      } else {
-        elements.editButton.hidden = true;
-      }
-      elements.scoreSheetButton.addEventListener('click', () => {
-        try {
-          window.BscPdfExporter.downloadScoreSheetPdf(currentScore, {
-            sectionLabel: activeScoreSection.toUpperCase(),
-          });
-          showToast('Score sheet PDF download started.', 'success');
-        } catch (error) {
-          showToast(error.message || 'Failed to download score sheet PDF.', 'error');
-        }
-      });
-      elements.reviewSheetButton.addEventListener('click', () => {
-        showToast('Review sheet download will be converted in a later iteration.', 'info');
-      });
     } catch (error) {
+      currentScore = null;
+      elements.content.hidden = true;
+      elements.loading.hidden = false;
       elements.loading.textContent = error.message || 'Failed to load score sheet.';
       showToast(elements.loading.textContent, 'error');
     }
+  }
+
+  async function init() {
+    const user = ensureDealer();
+    if (!user) return;
+    currentUser = user;
+    mode = 'view';
+    elements.userName.textContent = user.dealerName || user.name || 'Dealer';
+    elements.userCode.textContent = user.dealerCode || user.role || 'DEALER';
+    updateScorePageTitle();
+    setupMonthFilter();
+    setupYearFilter();
+    bindShellEvents();
+    loadDealerScore();
   }
 
   init();

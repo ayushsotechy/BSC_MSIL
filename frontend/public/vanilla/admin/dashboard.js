@@ -215,6 +215,17 @@
     fillSelect(elements.zoneFilter, state.zones, 'All Zones');
     fillSelect(elements.regionFilter, state.regions, 'All Regions');
     fillSelect(elements.monthFilter, MONTHS, 'All Months');
+    fillSelect(elements.yearFilter, getAvailableYears(state.rows), 'All Years');
+  }
+
+  function getAvailableYears(rows) {
+    const currentYear = new Date().getFullYear();
+    const nearbyYears = Array.from({ length: 16 }, (_, index) => String(currentYear + 5 - index));
+    return uniqueValues([
+      ...(rows || []).map((row) => row.fiscalYear),
+      ...nearbyYears,
+    ])
+      .sort((first, second) => Number(second) - Number(first));
   }
 
   function getFilteredRows() {
@@ -818,6 +829,7 @@
       ]);
       state.rows = Array.isArray(scoreResponse.data) ? scoreResponse.data : [];
       syncAccessState(accessResponse);
+      setupFilters();
       setActiveSection('bsc');
     } catch (error) {
       elements.table.hidden = true;

@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Admin Dashboard | BSC Portal</title>
-    <link rel="stylesheet" href="../styles.css" />
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="../shared/styles.css" />
+    <link rel="stylesheet" href="./dashboard.css" />
   </head>
   <body>
     <div class="dashboard-page">
@@ -130,7 +130,9 @@
             </label>
             <label>
               <span>Year</span>
-              <input id="year-filter" type="search" placeholder="e.g. 2026" autocomplete="off" />
+              <select id="year-filter">
+                <option value="">All Years</option>
+              </select>
             </label>
           </section>
 
@@ -234,6 +236,6 @@
     </div>
 
     <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
-    <script src="./app.js"></script>
+    <script src="./dashboard.js"></script>
   </body>
 </html>

@@ -2,6 +2,10 @@ body {
   background: linear-gradient(135deg, #c7fbff 0%, #d8ddff 52%, #7376f3 100%);
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .dashboard-page {
   min-height: 100vh;
 }
