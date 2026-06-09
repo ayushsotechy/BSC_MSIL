@@ -181,6 +181,121 @@ body {
   border: 1px solid rgba(49, 112, 224, 0.35);
 }
 
+.upload-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.upload-dialog__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 30, 58, 0.45);
+  backdrop-filter: blur(5px);
+}
+
+.upload-dialog__panel {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 620px);
+  border-radius: 8px;
+  padding: 44px 54px 42px;
+  color: #08254f;
+  background: linear-gradient(135deg, #58bfff 0%, #1f82e4 100%);
+  box-shadow: 0 26px 70px rgba(7, 28, 69, 0.34);
+}
+
+.upload-dialog__panel h2 {
+  margin: 0 0 26px;
+  color: #08254f;
+  font-size: 24px;
+}
+
+.upload-dialog__close {
+  position: absolute;
+  top: 22px;
+  right: 26px;
+  width: 38px;
+  height: 38px;
+  border: 0;
+  color: #fff;
+  background: transparent;
+  font: inherit;
+  font-size: 34px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.upload-dialog__field {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  align-items: center;
+  gap: 26px;
+  margin-bottom: 20px;
+  font-size: 21px;
+  font-weight: 800;
+}
+
+.upload-dialog__field input,
+.upload-dialog__field select {
+  width: 100%;
+  height: 50px;
+  border: 2px solid rgba(180, 192, 235, 0.9);
+  border-radius: 8px;
+  padding: 0 18px;
+  color: #13264d;
+  background: #fff;
+  font: inherit;
+  font-weight: 600;
+  outline: none;
+}
+
+.upload-dialog__actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 22px;
+  margin-top: 34px;
+}
+
+.upload-dialog__browse,
+.upload-dialog__submit {
+  min-width: 150px;
+  height: 52px;
+  border: 0;
+  border-radius: 8px;
+  color: #08254f;
+  background: transparent;
+  font: inherit;
+  font-size: 21px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.upload-dialog__submit {
+  color: #fff;
+  background: #1a32b1;
+}
+
+.upload-dialog__browse:disabled,
+.upload-dialog__submit:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.upload-dialog__file {
+  min-height: 20px;
+  margin: 18px 0 0;
+  color: #0a336c;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: center;
+  word-break: break-word;
+}
+
 .filter-panel {
   display: grid;
   grid-template-columns: repeat(4, minmax(160px, 1fr));
@@ -632,5 +747,25 @@ body {
 
   .filter-panel {
     grid-template-columns: 1fr;
+  }
+
+  .upload-dialog__panel {
+    padding: 38px 24px 30px;
+  }
+
+  .upload-dialog__field {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    font-size: 17px;
+  }
+
+  .upload-dialog__actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .upload-dialog__browse,
+  .upload-dialog__submit {
+    width: 100%;
   }
 }

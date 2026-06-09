@@ -22,6 +22,11 @@
       month: '',
       year: '',
     },
+    upload: {
+      file: null,
+      month: '',
+      year: '',
+    },
   };
 
   const elements = {
@@ -57,6 +62,46 @@
   uploadInput.accept = '.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel';
   uploadInput.hidden = true;
   document.body.appendChild(uploadInput);
+
+  const uploadDialog = document.createElement('div');
+  uploadDialog.className = 'upload-dialog';
+  uploadDialog.hidden = true;
+  uploadDialog.innerHTML = `
+    <div class="upload-dialog__backdrop" data-upload-close></div>
+    <div class="upload-dialog__panel" role="dialog" aria-modal="true" aria-labelledby="upload-dialog-title">
+      <button class="upload-dialog__close" type="button" aria-label="Close upload dialog" data-upload-close>&times;</button>
+      <h2 id="upload-dialog-title">Upload Excel</h2>
+      <label class="upload-dialog__field">
+        <span>Year</span>
+        <input id="upload-year-input" type="text" inputmode="numeric" autocomplete="off" />
+      </label>
+      <label class="upload-dialog__field">
+        <span>Month</span>
+        <select id="upload-month-input"></select>
+      </label>
+      <div class="upload-dialog__actions">
+        <button id="upload-browse-button" class="upload-dialog__browse" type="button">Browse</button>
+        <button id="upload-submit-button" class="upload-dialog__submit" type="button">Upload</button>
+      </div>
+      <p id="upload-file-name" class="upload-dialog__file">No file selected</p>
+    </div>
+  `;
+  document.body.appendChild(uploadDialog);
+
+  const uploadElements = {
+    year: uploadDialog.querySelector('#upload-year-input'),
+    month: uploadDialog.querySelector('#upload-month-input'),
+    browseButton: uploadDialog.querySelector('#upload-browse-button'),
+    submitButton: uploadDialog.querySelector('#upload-submit-button'),
+    fileName: uploadDialog.querySelector('#upload-file-name'),
+  };
+
+  MONTHS.forEach((month) => {
+    const option = document.createElement('option');
+    option.value = month;
+    option.textContent = month;
+    uploadElements.month.appendChild(option);
+  });
 
   function getStoredUser() {
     try {
@@ -111,12 +156,12 @@
     return data;
   }
 
-  async function apiUploadBscExcel(file) {
+  async function apiUploadBscExcel(file, period) {
     const token = localStorage.getItem('bsc_token');
     const formData = new FormData();
     formData.append('file', file);
-    if (state.filters.year) formData.append('fiscalYear', state.filters.year);
-    if (state.filters.month) formData.append('month', state.filters.month);
+    formData.append('fiscalYear', period.year);
+    formData.append('month', period.month);
 
     const response = await fetch(`${API_BASE_URL}/bsc/upload-excel`, {
       method: 'POST',
@@ -260,6 +305,59 @@
       ...nearbyYears,
     ])
       .sort((first, second) => Number(second) - Number(first));
+  }
+
+  function getDefaultUploadMonth() {
+    if (state.filters.month) return state.filters.month;
+    const currentMonth = new Date().toLocaleString('en-US', { month: 'long' });
+    return MONTHS.includes(currentMonth) ? currentMonth : MONTHS[0];
+  }
+
+  function getDefaultUploadYear() {
+    return state.filters.year || String(new Date().getFullYear());
+  }
+
+  function openUploadDialog() {
+    state.upload.file = null;
+    state.upload.month = getDefaultUploadMonth();
+    state.upload.year = getDefaultUploadYear();
+    uploadElements.year.value = state.upload.year;
+    uploadElements.month.value = state.upload.month;
+    uploadElements.fileName.textContent = 'No file selected';
+    uploadDialog.hidden = false;
+    uploadElements.year.focus();
+  }
+
+  function closeUploadDialog() {
+    uploadDialog.hidden = true;
+    state.upload.file = null;
+    uploadInput.value = '';
+  }
+
+  function getUploadPeriod() {
+    return {
+      year: String(uploadElements.year.value || '').trim(),
+      month: String(uploadElements.month.value || '').trim(),
+    };
+  }
+
+  function applyUploadPeriod(scores, period) {
+    return scores.map((score) => ({
+      ...score,
+      fiscalYear: period.year,
+      month: period.month,
+    }));
+  }
+
+  function selectUploadedPeriod(period) {
+    state.filters.month = period.month;
+    state.filters.year = period.year;
+    if ([...elements.monthFilter.options].some((option) => option.value === period.month)) {
+      elements.monthFilter.value = period.month;
+    }
+    if ([...elements.yearFilter.options].some((option) => option.value === period.year)) {
+      elements.yearFilter.value = period.year;
+    }
   }
 
   function getFilteredRows() {
@@ -685,27 +783,37 @@
     const uploadButton = document.getElementById('upload-button');
     uploadButton.disabled = isBusy;
     uploadButton.textContent = isBusy ? 'Uploading...' : 'Upload Excel';
+    uploadElements.browseButton.disabled = isBusy;
+    uploadElements.submitButton.disabled = isBusy;
+    uploadElements.submitButton.textContent = isBusy ? 'Uploading...' : 'Upload';
   }
 
-  async function handleExcelFile(file) {
-    if (!file) return;
+  async function handleExcelFile(file, period) {
+    if (!file) {
+      showToast('Please choose an Excel file before uploading.', 'error');
+      return;
+    }
     const extension = file.name.split('.').pop().toLowerCase();
     if (!['xls', 'xlsx'].includes(extension)) {
       showToast('Please choose an Excel file (.xls or .xlsx).', 'error');
       return;
     }
+    if (!period.year || !period.month) {
+      showToast('Please enter year and month before uploading.', 'error');
+      return;
+    }
 
     try {
       setUploadBusy(true);
-      const parsed = await apiUploadBscExcel(file);
-      const scores = Array.isArray(parsed.data) ? parsed.data : [];
+      const parsed = await apiUploadBscExcel(file, period);
+      const scores = applyUploadPeriod(Array.isArray(parsed.data) ? parsed.data : [], period);
 
       if (!scores.length) {
         showToast(parsed.message || 'No scorecards found in the Excel file.', 'error');
         return;
       }
 
-      const periodHint = [state.filters.month, state.filters.year].filter(Boolean).join(' ');
+      const periodHint = `${period.month} ${period.year}`;
       const shouldSave = window.confirm(
         `Parsed ${scores.length} scorecard${scores.length === 1 ? '' : 's'}${periodHint ? ` for ${periodHint}` : ''}. Save them to BSC master data?`
       );
@@ -717,7 +825,9 @@
       const saveResponse = await apiSend('POST', '/bsc/bulk-save', { scores, upsert: true });
       await syncParsedAccessCredentials(parsed.accessCredentials);
       await refreshDashboardData();
+      selectUploadedPeriod(period);
       setActiveSection('bsc');
+      closeUploadDialog();
       showToast(saveResponse.message || `${scores.length} scorecards saved successfully.`, 'success');
     } catch (error) {
       showToast(error.message || 'Failed to upload Excel file.', 'error');
@@ -871,9 +981,22 @@
       showToast('Azure document browser placeholder. Link/API will be connected later.', 'info');
     });
     document.getElementById('upload-button').addEventListener('click', () => {
+      openUploadDialog();
+    });
+    uploadElements.browseButton.addEventListener('click', () => {
       uploadInput.click();
     });
-    uploadInput.addEventListener('change', () => handleExcelFile(uploadInput.files?.[0]));
+    uploadElements.submitButton.addEventListener('click', () => {
+      const period = getUploadPeriod();
+      handleExcelFile(state.upload.file, period);
+    });
+    uploadDialog.querySelectorAll('[data-upload-close]').forEach((button) => {
+      button.addEventListener('click', closeUploadDialog);
+    });
+    uploadInput.addEventListener('change', () => {
+      state.upload.file = uploadInput.files?.[0] || null;
+      uploadElements.fileName.textContent = state.upload.file ? state.upload.file.name : 'No file selected';
+    });
     document.getElementById('add-button').addEventListener('click', () => {
       showToast('Add BSC score will be converted in a later iteration.', 'info');
     });
