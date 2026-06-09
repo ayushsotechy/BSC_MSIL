@@ -78,14 +78,92 @@ const AREA_NAMES = [
   'Dealer Infrastructure',
 ];
 
+const EARLY_BIRD_SHEET_NAMES = [
+  'Early Bird',
+  'EarlyBird',
+  'Early Bird Points',
+  'Early Year',
+  'Early Year Points',
+];
+
+const FULL_YEAR_SHEET_NAMES = [
+  'Full Year',
+  'FullYear',
+  'Full Year Points',
+];
+
 const getFlatParameters = (score) => score.businessAreas.flatMap((businessArea) => businessArea.parameters);
+const PARAMETER_COUNT = 31;
+const AREA_COUNT = 8;
+
+const WIDE_TEMPLATE_PERIODS = {
+  earlyBird: {
+    achieved: ['E', 'AI'],
+    achievedTotals: ['AP', 'AW'],
+    achievedGrandColumn: 'AX',
+    maxPoints: ['AZ', 'CD'],
+    maxTotals: ['CG', 'CN'],
+    maxGrandColumn: 'CO',
+    minPoints: ['CQ', 'DU'],
+    minTotals: ['DX', 'EE'],
+    minGrandColumn: 'EF',
+    scoreColumn: 'AK',
+    denominatorValue: 1000,
+    qualificationColumn: 'AM',
+    bandColumn: 'AN',
+  },
+  fullYear: {
+    achieved: ['E', 'AI'],
+    achievedTotals: ['BJ', 'BR'],
+    achievedGrandColumn: 'BR',
+    maxPoints: ['BT', 'CX'],
+    maxTotals: ['DA', 'DI'],
+    maxGrandColumn: 'DI',
+    minPoints: ['DK', 'EO'],
+    minTotals: ['ER', 'EZ'],
+    minGrandColumn: 'EZ',
+    scoreColumn: 'AK',
+    scorePercentColumn: 'AL',
+    bandColumn: 'AM',
+    denominatorColumn: 'DI',
+  },
+};
 
 const col = (columnName) => XLSX.utils.decode_col(columnName);
+
+const columnName = (columnIndex) => XLSX.utils.encode_col(columnIndex);
 
 const getRangeValues = (row, startColumn, endColumn) =>
   row.slice(col(startColumn), col(endColumn) + 1);
 
 const getCellAt = (row, columnName) => row[col(columnName)];
+
+const findSheetName = (workbook, sheetNames) => {
+  const expectedNames = sheetNames.map(normalize);
+  const normalizedSheetNames = workbook.SheetNames.map((name) => ({
+    name,
+    normalized: normalize(name),
+  }));
+
+  return normalizedSheetNames.find((sheet) =>
+    expectedNames.some((expected) => sheet.normalized === expected)
+  )?.name || normalizedSheetNames.find((sheet) =>
+    expectedNames.some((expected) =>
+      sheet.normalized.includes(expected) || expected.includes(sheet.normalized)
+    )
+  )?.name;
+};
+
+const findWideTemplateHeaderIndex = (rows = []) =>
+  rows.findIndex((row = []) =>
+    normalize(row[col('C')]) === normalize('BSC Parent Dealer Code') &&
+    normalize(row[col('E')]) === normalize('All Models Wholesales Performance')
+  );
+
+const getWideTemplateDataRows = (rows) => {
+  const headerIndex = findWideTemplateHeaderIndex(rows);
+  return headerIndex >= 0 ? (rows || []).slice(headerIndex + 1) : [];
+};
 
 const createBaseScore = ({ dealerCode, dealerName, region, fiscalYear, month }) => ({
   dealerCode,
@@ -221,23 +299,19 @@ const EARLY_BIRD_TOTAL_COLUMNS = [
 ];
 
 const getSheetRows = (workbook, sheetNames) => {
-  const sheetName = workbook.SheetNames.find((name) =>
-    sheetNames.some((expected) => normalize(name) === normalize(expected))
-  );
+  const sheetName = findSheetName(workbook, sheetNames);
 
   if (!sheetName) return [];
 
   const worksheet = workbook.Sheets[sheetName];
   const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
-  const rowFive = rows[4] || [];
-  const hasTemplateHeader = rowFive.some((value) => normalize(value) === normalize('BSC Parent Dealer Code')) &&
-    rowFive.some((value) => normalize(value) === normalize('All Models Wholesales Performance'));
+  const templateHeaderIndex = findWideTemplateHeaderIndex(rows);
 
-  if (hasTemplateHeader) {
+  if (templateHeaderIndex >= 0) {
     const templateColumnCount = XLSX.utils.decode_col('AI') + 1;
-    const headers = rowFive.slice(0, templateColumnCount);
+    const headers = rows[templateHeaderIndex].slice(0, templateColumnCount);
 
-    return rows.slice(5).map((row) =>
+    return rows.slice(templateHeaderIndex + 1).map((row) =>
       headers.reduce((record, header, index) => {
         if (header !== '') record[header] = row[index] ?? '';
         return record;
@@ -298,6 +372,86 @@ const calculateGrandMetricTotal = (score, period, key) =>
     (sum, area) => sum + calculateAreaMetricTotal(area, period, key),
     0
   );
+
+const parameterHeaderAliases = (parameterName) => {
+  const normalized = normalize(parameterName);
+  if (normalized === normalize('Purchase Cycle Management')) {
+    return [normalized, normalize('Repurchase Cycle Management')];
+  }
+  if (normalized === normalize('MSGA Performance- Showroom Acc / Veh')) {
+    return [
+      normalized,
+      normalize('MSGA Performance - Showroom Acc / Veh'),
+      normalize('MSGA  Performance- Showroom Acc / Veh'),
+    ];
+  }
+  return [normalized];
+};
+
+const getExpectedParameterHeaders = (score) =>
+  getFlatParameters(score).map((param) => parameterHeaderAliases(param.parameter));
+
+const scoreParameterHeaderBlock = (headerRow, startColumnIndex, expectedHeaders) => {
+  if (!headerRow || startColumnIndex < 0) return 0;
+
+  return expectedHeaders.reduce((matches, aliases, index) => {
+    const header = normalize(headerRow[startColumnIndex + index]);
+    return aliases.includes(header) ? matches + 1 : matches;
+  }, 0);
+};
+
+const resolveParameterRange = (score, headerRow, preferredRange, fallbackStartColumn) => {
+  const expectedHeaders = getExpectedParameterHeaders(score);
+  const preferredStart = col(preferredRange[0]);
+
+  if (scoreParameterHeaderBlock(headerRow, preferredStart, expectedHeaders) >= 28) {
+    return preferredRange;
+  }
+
+  for (
+    let startColumnIndex = fallbackStartColumn;
+    startColumnIndex <= (headerRow || []).length - PARAMETER_COUNT;
+    startColumnIndex += 1
+  ) {
+    if (scoreParameterHeaderBlock(headerRow, startColumnIndex, expectedHeaders) >= 28) {
+      return [
+        columnName(startColumnIndex),
+        columnName(startColumnIndex + PARAMETER_COUNT - 1),
+      ];
+    }
+  }
+
+  return preferredRange;
+};
+
+const hasAreaTotalHeaderRange = (headerRow, range) => {
+  const startIndex = col(range[0]);
+  const labels = AREA_NAMES.map((areaName) => normalize(areaName));
+  const rangeLabels = getRangeValues(headerRow || [], ...range).map(normalize);
+
+  if (rangeLabels.length < AREA_COUNT) return false;
+
+  const areaMatches = labels.reduce((matches, label, index) => {
+    const header = rangeLabels[index];
+    return header === label || header.includes(label) || label.includes(header)
+      ? matches + 1
+      : matches;
+  }, 0);
+  const grandHeader = rangeLabels[AREA_COUNT];
+
+  return startIndex >= 0 && areaMatches >= 6 && (!grandHeader || grandHeader === 'total');
+};
+
+const ensureCalculatedAreaTotals = (score, period) => {
+  score.businessAreas = score.businessAreas.map((businessArea) => ({
+    ...businessArea,
+    [`${period}Total`]: {
+      achieved: calculateAreaMetricTotal(businessArea, period, 'achieved'),
+      maxPoints: calculateAreaMetricTotal(businessArea, period, 'maxPoints'),
+      minPoints: calculateAreaMetricTotal(businessArea, period, 'minPoints'),
+    },
+  }));
+};
 
 const applyFullYearTotals = (score) => {
   score.businessAreas = score.businessAreas.map((area) => ({
@@ -368,7 +522,7 @@ const getDealerCode = (row, fallbackIndex) =>
       'Parent Dealer Code',
       'Dealer Code',
       'Code',
-    ]) || `DEALER-${fallbackIndex + 1}`
+    ]) || ''
   ).trim();
 
 const getDealerName = (row) =>
@@ -381,9 +535,7 @@ const getZone = (row) =>
   String(getCell(row, ['Zone']) || '').trim();
 
 const getWorksheetRows = (workbook, sheetNames) => {
-  const sheetName = workbook.SheetNames.find((name) =>
-    sheetNames.some((expected) => normalize(name) === normalize(expected))
-  );
+  const sheetName = findSheetName(workbook, sheetNames);
 
   if (!sheetName) return null;
 
@@ -394,9 +546,7 @@ const getWorksheetRows = (workbook, sheetNames) => {
 };
 
 const getWorksheetData = (workbook, sheetNames) => {
-  const sheetName = workbook.SheetNames.find((name) =>
-    sheetNames.some((expected) => normalize(name) === normalize(expected))
-  );
+  const sheetName = findSheetName(workbook, sheetNames);
 
   if (!sheetName) return null;
 
@@ -421,9 +571,7 @@ const getWorksheetData = (workbook, sheetNames) => {
 };
 
 const isWideTemplateRows = (rows) => {
-  const headerRow = rows?.[4] || [];
-  return normalize(headerRow[col('C')]) === normalize('BSC Parent Dealer Code') &&
-    normalize(headerRow[col('E')]) === normalize('All Models Wholesales Performance');
+  return findWideTemplateHeaderIndex(rows) >= 0;
 };
 
 const applyMetricRange = (score, row, period, key, startColumn, endColumn) => {
@@ -455,55 +603,125 @@ const applyAreaTotalRange = (score, row, period, key, startColumn, endColumn) =>
   return toNumber(values[AREA_NAMES.length]);
 };
 
-const applyWideTemplatePeriod = (score, row, period, displayRow = row) => {
+const getDisplayCellAt = (row, displayRow, cellColumnName) => {
+  const value = getCellAt(displayRow || [], cellColumnName);
+  return value !== undefined && value !== '' ? value : getCellAt(row, cellColumnName);
+};
+
+const findHeaderColumn = (headerRow, possibleNames) => {
+  const normalizedNames = possibleNames.map(normalize);
+  return (headerRow || []).findIndex((value) => normalizedNames.includes(normalize(value)));
+};
+
+const readDisplayCellByHeader = (row, displayRow, headerRow, possibleNames, fallbackColumn) => {
+  const headerColumnIndex = findHeaderColumn(headerRow, possibleNames);
+  const cellColumnName = headerColumnIndex >= 0 ? columnName(headerColumnIndex) : fallbackColumn;
+  return getDisplayCellAt(row, displayRow, cellColumnName);
+};
+
+const applyWideTemplatePeriod = (score, row, period, displayRow = row, headerRow = []) => {
+  const config = WIDE_TEMPLATE_PERIODS[period];
+  if (!config) return;
+
+  applyMetricRange(score, row, period, 'achieved', ...config.achieved);
+
+  const maxRange = resolveParameterRange(score, headerRow, config.maxPoints, col(config.maxPoints[0]));
+  applyMetricRange(score, row, period, 'maxPoints', ...maxRange);
+
+  const minRange = resolveParameterRange(score, headerRow, config.minPoints, col(maxRange[1]) + 1);
+  applyMetricRange(score, row, period, 'minPoints', ...minRange);
+
+  const achievedGrand = hasAreaTotalHeaderRange(headerRow, config.achievedTotals)
+    ? applyAreaTotalRange(score, row, period, 'achieved', ...config.achievedTotals)
+    : calculateGrandMetricTotal(score, period, 'achieved');
+  const achievedGrandTotal = toNumber(getCellAt(row, config.achievedGrandColumn)) || achievedGrand;
+  const maxGrand = hasAreaTotalHeaderRange(headerRow, config.maxTotals)
+    ? applyAreaTotalRange(score, row, period, 'maxPoints', ...config.maxTotals)
+    : calculateGrandMetricTotal(score, period, 'maxPoints');
+  const maxGrandTotal = toNumber(getCellAt(row, config.maxGrandColumn)) || maxGrand;
+
+  let minGrand = 0;
+  if (hasAreaTotalHeaderRange(headerRow, config.minTotals)) {
+    minGrand = applyAreaTotalRange(score, row, period, 'minPoints', ...config.minTotals);
+  } else {
+    ensureCalculatedAreaTotals(score, period);
+    minGrand = calculateGrandMetricTotal(score, period, 'minPoints');
+  }
+  const minGrandTotal = toNumber(getCellAt(row, config.minGrandColumn)) || minGrand;
+
   if (period === 'fullYear') {
-    applyMetricRange(score, row, period, 'achieved', 'E', 'AI');
-    const achievedGrand = applyAreaTotalRange(score, row, period, 'achieved', 'BJ', 'BR');
-
-    applyMetricRange(score, row, period, 'maxPoints', 'BT', 'CX');
-    const maxGrand = applyAreaTotalRange(score, row, period, 'maxPoints', 'DA', 'DI');
-    const maxSectionGrand = toNumber(getCellAt(row, 'CY'));
-
-    applyMetricRange(score, row, period, 'minPoints', 'DK', 'EO');
-    applyAreaTotalRange(score, row, period, 'minPoints', 'ER', 'EZ');
-
-    const scoreValue = String(getCellAt(displayRow, 'AK') || getCellAt(row, 'AK') || achievedGrand).trim();
-    const denominator = maxGrand || maxSectionGrand || 0;
+    const scoreValue = String(
+      readDisplayCellByHeader(
+        row,
+        displayRow,
+        headerRow,
+        ['Full Year Provisional Score (Out of 1000)', 'Full Year Provisional Score'],
+        config.scoreColumn
+      ) || achievedGrandTotal
+    ).trim();
+    const denominator = toNumber(getCellAt(row, config.denominatorColumn)) ||
+      toNumber(getCellAt(row, columnName(col(maxRange[1]) + 1))) ||
+      maxGrandTotal;
 
     score.fullYear = {
       ...(score.fullYear || {}),
       provisionalScore: `${scoreValue}/${denominator}`,
-      provisionalScorePercent: String(getCellAt(displayRow, 'AL') || getCellAt(row, 'AL') || '').trim(),
+      provisionalScorePercent: String(
+        readDisplayCellByHeader(
+          row,
+          displayRow,
+          headerRow,
+          ['Full Year Provisional Score Achievement'],
+          config.scorePercentColumn
+        ) || ''
+      ).trim(),
       qualification: score.fullYear?.qualification || 'N',
-      band: String(getCellAt(displayRow, 'AM') || getCellAt(row, 'AM') || 'NO BAND').trim(),
+      total: {
+        achieved: achievedGrandTotal,
+        maxPoints: maxGrandTotal,
+        minPoints: minGrandTotal,
+      },
+      band: String(
+        readDisplayCellByHeader(row, displayRow, headerRow, ['Full Year Band'], config.bandColumn) ||
+          'NO BAND'
+      ).trim(),
     };
   } else {
-    applyMetricRange(score, row, period, 'achieved', 'E', 'AI');
-    const achievedGrand = applyAreaTotalRange(score, row, period, 'achieved', 'AP', 'AX');
-
-    applyMetricRange(score, row, period, 'maxPoints', 'AZ', 'CD');
-    const maxGrand = applyAreaTotalRange(score, row, period, 'maxPoints', 'CG', 'CO');
-    const maxSectionGrand = toNumber(getCellAt(row, 'CE'));
-
-    applyMetricRange(score, row, period, 'minPoints', 'CQ', 'DU');
-    applyAreaTotalRange(score, row, period, 'minPoints', 'DX', 'EF');
-
-    const scoreValue = String(getCellAt(displayRow, 'AK') || getCellAt(row, 'AK') || achievedGrand).trim();
-    const denominator = maxGrand || maxSectionGrand || 0;
+    const scoreValue = String(getDisplayCellAt(row, displayRow, config.scoreColumn) || achievedGrandTotal).trim();
+    const denominator = config.denominatorValue ||
+      toNumber(getCellAt(row, config.denominatorColumn)) ||
+      toNumber(getCellAt(row, columnName(col(maxRange[1]) + 1))) ||
+      maxGrandTotal;
 
     score.earlyBird = {
       ...(score.earlyBird || {}),
       provisionalScore: `${scoreValue}/${denominator}`,
-      provisionalScorePercent: String(getCellAt(displayRow, 'AL') || getCellAt(row, 'AL') || '').trim(),
-      qualification: String(getCellAt(displayRow, 'AM') || getCellAt(row, 'AM') || 'N').trim(),
-      band: String(getCellAt(displayRow, 'AN') || getCellAt(row, 'AN') || 'NO BAND').trim(),
+      provisionalScorePercent: '',
+      total: {
+        achieved: achievedGrandTotal,
+        maxPoints: maxGrandTotal,
+        minPoints: minGrandTotal,
+      },
+      qualification: String(
+        readDisplayCellByHeader(
+          row,
+          displayRow,
+          headerRow,
+          ['Early Year Band Qualification', 'Early Bird Qualification'],
+          config.qualificationColumn
+        ) || 'N'
+      ).trim(),
+      band: String(
+        readDisplayCellByHeader(row, displayRow, headerRow, ['Early Year Band', 'Early Bird Band'], config.bandColumn) ||
+          'NO BAND'
+      ).trim(),
     };
   }
 };
 
 const createWideTemplateScore = (row, index, options = {}) => ({
   ...createBaseScore({
-    dealerCode: String(getCellAt(row, 'C') || `DEALER-${index + 1}`).trim(),
+    dealerCode: String(getCellAt(row, 'C') || '').trim(),
     dealerName: String(getCellAt(row, 'D') || '').trim(),
     region: String(getCellAt(row, 'B') || '').trim(),
     fiscalYear: options.fiscalYear,
@@ -514,17 +732,27 @@ const createWideTemplateScore = (row, index, options = {}) => ({
 
 const mergeWideTemplateRows = ({ earlyBirdRows, earlyBirdDisplayRows, fullYearRows, fullYearDisplayRows, fiscalYear, month }) => {
   const scoreMap = new Map();
+  const fullYearHeaderIndex = findWideTemplateHeaderIndex(fullYearRows);
+  const earlyBirdHeaderIndex = findWideTemplateHeaderIndex(earlyBirdRows);
+  const fullYearHeaderRow = fullYearHeaderIndex >= 0 ? fullYearRows[fullYearHeaderIndex] : [];
+  const earlyBirdHeaderRow = earlyBirdHeaderIndex >= 0 ? earlyBirdRows[earlyBirdHeaderIndex] : [];
 
-  (fullYearRows || []).slice(5).forEach((row, rowIndex) => {
+  getWideTemplateDataRows(fullYearRows).forEach((row, rowIndex) => {
     const dealerCode = String(getCellAt(row, 'C') || '').trim();
     if (!dealerCode) return;
 
     const score = createWideTemplateScore(row, rowIndex, { fiscalYear, month });
-    applyWideTemplatePeriod(score, row, 'fullYear', fullYearDisplayRows?.[rowIndex + 5] || row);
+    applyWideTemplatePeriod(
+      score,
+      row,
+      'fullYear',
+      fullYearDisplayRows?.[rowIndex + fullYearHeaderIndex + 1] || row,
+      fullYearHeaderRow
+    );
     scoreMap.set(dealerCode, score);
   });
 
-  (earlyBirdRows || []).slice(5).forEach((row, rowIndex) => {
+  getWideTemplateDataRows(earlyBirdRows).forEach((row, rowIndex) => {
     const dealerCode = String(getCellAt(row, 'C') || '').trim();
     if (!dealerCode) return;
 
@@ -535,7 +763,13 @@ const mergeWideTemplateRows = ({ earlyBirdRows, earlyBirdDisplayRows, fullYearRo
     if (!existing.region) existing.region = String(getCellAt(row, 'B') || '').trim();
     if (!existing.zone) existing.zone = String(getCellAt(row, 'A') || '').trim();
 
-    applyWideTemplatePeriod(existing, row, 'earlyBird', earlyBirdDisplayRows?.[rowIndex + 5] || row);
+    applyWideTemplatePeriod(
+      existing,
+      row,
+      'earlyBird',
+      earlyBirdDisplayRows?.[rowIndex + earlyBirdHeaderIndex + 1] || row,
+      earlyBirdHeaderRow
+    );
     scoreMap.set(dealerCode, existing);
   });
 
@@ -603,8 +837,8 @@ const mergeByDealerCode = ({ earlyBirdRows, fullYearRows, fiscalYear, month }) =
 
 const parseBscWorkbook = (buffer, options = {}) => {
   const workbook = XLSX.read(buffer, { type: 'buffer' });
-  const earlyBirdTemplateData = getWorksheetData(workbook, ['Early Bird', 'EarlyBird', 'Early Bird Points']);
-  const fullYearTemplateData = getWorksheetData(workbook, ['Full Year', 'FullYear', 'Full Year Points']);
+  const earlyBirdTemplateData = getWorksheetData(workbook, EARLY_BIRD_SHEET_NAMES);
+  const fullYearTemplateData = getWorksheetData(workbook, FULL_YEAR_SHEET_NAMES);
 
   if (isWideTemplateRows(earlyBirdTemplateData?.rows) || isWideTemplateRows(fullYearTemplateData?.rows)) {
     return mergeWideTemplateRows({
@@ -617,8 +851,8 @@ const parseBscWorkbook = (buffer, options = {}) => {
     }).scores;
   }
 
-  const earlyBirdRows = getSheetRows(workbook, ['Early Bird', 'EarlyBird', 'Early Bird Points']);
-  const fullYearRows = getSheetRows(workbook, ['Full Year', 'FullYear', 'Full Year Points']);
+  const earlyBirdRows = getSheetRows(workbook, EARLY_BIRD_SHEET_NAMES);
+  const fullYearRows = getSheetRows(workbook, FULL_YEAR_SHEET_NAMES);
 
   console.log('\n========== EXCEL DEBUG ==========');
 
@@ -647,8 +881,8 @@ const parseBscWorkbook = (buffer, options = {}) => {
 
 const parseBscWorkbookWithMetadata = (buffer, options = {}) => {
   const workbook = XLSX.read(buffer, { type: 'buffer' });
-  const earlyBirdTemplateData = getWorksheetData(workbook, ['Early Bird', 'EarlyBird', 'Early Bird Points']);
-  const fullYearTemplateData = getWorksheetData(workbook, ['Full Year', 'FullYear', 'Full Year Points']);
+  const earlyBirdTemplateData = getWorksheetData(workbook, EARLY_BIRD_SHEET_NAMES);
+  const fullYearTemplateData = getWorksheetData(workbook, FULL_YEAR_SHEET_NAMES);
 
   if (isWideTemplateRows(earlyBirdTemplateData?.rows) || isWideTemplateRows(fullYearTemplateData?.rows)) {
     return mergeWideTemplateRows({

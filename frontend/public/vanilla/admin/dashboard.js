@@ -14,6 +14,7 @@
     zones: [],
     regions: [],
     uploadPreviewRows: [],
+    uploadAccessCredentials: [],
     page: 1,
     credentialsPage: 1,
     filters: {
@@ -167,21 +168,25 @@
     return data;
   }
 
-  async function apiUploadBscExcel(file, period) {
+  async function apiSendForm(path, formData) {
     const token = localStorage.getItem('bsc_token');
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('fiscalYear', period.year);
-    formData.append('month', period.month);
-
-    const response = await fetch(`${API_BASE_URL}/bsc/upload-excel`, {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: formData,
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.message || 'Excel upload failed.');
+    if (!response.ok) throw new Error(data.message || 'Request failed.');
     return data;
+  }
+
+  async function apiUploadBscExcel(file, period) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('fiscalYear', period.year);
+    formData.append('month', period.month);
+
+    return apiSendForm('/bsc/upload-excel', formData);
   }
 
   function normalizeAccessControl(payload) {
@@ -317,7 +322,12 @@
       ...(rows || []).map((row) => row.fiscalYear),
       ...nearbyYears,
     ])
+      .filter(Boolean)
       .sort((first, second) => Number(second) - Number(first));
+  }
+
+  function getAvailableUploadYears() {
+    return getAvailableYears(state.rows);
   }
 
   function getFilteredRows() {
@@ -345,6 +355,7 @@
 
   function resetUploadPreview() {
     state.uploadPreviewRows = [];
+    state.uploadAccessCredentials = [];
     elements.uploadPreviewBody.innerHTML = '';
     elements.uploadPreviewTableWrap.hidden = true;
     elements.uploadPreviewEmpty.hidden = false;
@@ -428,6 +439,7 @@
 
       const response = await apiSendForm('/bsc/upload-excel', formData);
       state.uploadPreviewRows = Array.isArray(response.data) ? response.data : [];
+      state.uploadAccessCredentials = Array.isArray(response.accessCredentials) ? response.accessCredentials : [];
       renderUploadPreview(state.uploadPreviewRows);
       setUploadBusy(false, `${state.uploadPreviewRows.length} dealer scorecards ready to save.`);
       showToast(response.message || 'Excel parsed successfully.', 'success');
@@ -451,6 +463,7 @@
         scores: state.uploadPreviewRows,
         upsert: true,
       });
+      await syncParsedAccessCredentials(state.uploadAccessCredentials);
       showToast(response.message || 'Scorecards saved successfully.', 'success');
       const [scoreResponse, accessResponse] = await Promise.all([
         apiGet('/bsc/score?summary=true'),
@@ -863,7 +876,7 @@
     });
   }
 
-  function setUploadBusy(isBusy) {
+  function setLegacyUploadBusy(isBusy) {
     const uploadButton = document.getElementById('upload-button');
     uploadButton.disabled = isBusy;
     uploadButton.textContent = isBusy ? 'Uploading...' : 'Upload Excel';
@@ -888,7 +901,7 @@
     }
 
     try {
-      setUploadBusy(true);
+      setLegacyUploadBusy(true);
       const parsed = await apiUploadBscExcel(file, period);
       const scores = applyUploadPeriod(Array.isArray(parsed.data) ? parsed.data : [], period);
 
@@ -917,7 +930,7 @@
       showToast(error.message || 'Failed to upload Excel file.', 'error');
     } finally {
       uploadInput.value = '';
-      setUploadBusy(false);
+      setLegacyUploadBusy(false);
     }
   }
 
@@ -1065,7 +1078,7 @@
       showToast('Azure document browser placeholder. Link/API will be connected later.', 'info');
     });
     document.getElementById('upload-button').addEventListener('click', () => {
-      showToast('Excel upload will be converted in a later iteration.', 'info');
+      openUploadModal();
     });
     document.querySelectorAll('[data-upload-close]').forEach((element) => {
       element.addEventListener('click', closeUploadModal);
