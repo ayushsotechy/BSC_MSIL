@@ -52,6 +52,12 @@
     toastRegion: document.getElementById('toast-region'),
   };
 
+  const uploadInput = document.createElement('input');
+  uploadInput.type = 'file';
+  uploadInput.accept = '.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel';
+  uploadInput.hidden = true;
+  document.body.appendChild(uploadInput);
+
   function getStoredUser() {
     try {
       return JSON.parse(localStorage.getItem('bsc_user') || 'null');
@@ -102,6 +108,23 @@
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.message || 'Request failed.');
+    return data;
+  }
+
+  async function apiUploadBscExcel(file) {
+    const token = localStorage.getItem('bsc_token');
+    const formData = new FormData();
+    formData.append('file', file);
+    if (state.filters.year) formData.append('fiscalYear', state.filters.year);
+    if (state.filters.month) formData.append('month', state.filters.month);
+
+    const response = await fetch(`${API_BASE_URL}/bsc/upload-excel`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.message || 'Excel upload failed.');
     return data;
   }
 
@@ -216,6 +239,17 @@
     fillSelect(elements.regionFilter, state.regions, 'All Regions');
     fillSelect(elements.monthFilter, MONTHS, 'All Months');
     fillSelect(elements.yearFilter, getAvailableYears(state.rows), 'All Years');
+  }
+
+  async function refreshDashboardData() {
+    const [scoreResponse, accessResponse] = await Promise.all([
+      apiGet('/bsc/score?summary=true'),
+      apiGet('/access-control'),
+    ]);
+    state.rows = Array.isArray(scoreResponse.data) ? scoreResponse.data : [];
+    syncAccessState(accessResponse);
+    state.page = 1;
+    renderRows();
   }
 
   function getAvailableYears(rows) {
@@ -628,6 +662,71 @@
     }
   }
 
+  async function syncParsedAccessCredentials(credentials) {
+    const parsedCredentials = Array.isArray(credentials) ? credentials : [];
+    if (!parsedCredentials.length) return;
+
+    await apiSend('PUT', '/access-control', {
+      zones: uniqueValues([
+        ...state.zones,
+        ...parsedCredentials.map((credential) => credential.zone),
+      ]),
+      regions: uniqueValues([
+        ...state.regions,
+        ...parsedCredentials.map((credential) => credential.region),
+      ]),
+      msilPersons: state.msilPersons,
+      dealerCredentials: parsedCredentials,
+      returnData: false,
+    });
+  }
+
+  function setUploadBusy(isBusy) {
+    const uploadButton = document.getElementById('upload-button');
+    uploadButton.disabled = isBusy;
+    uploadButton.textContent = isBusy ? 'Uploading...' : 'Upload Excel';
+  }
+
+  async function handleExcelFile(file) {
+    if (!file) return;
+    const extension = file.name.split('.').pop().toLowerCase();
+    if (!['xls', 'xlsx'].includes(extension)) {
+      showToast('Please choose an Excel file (.xls or .xlsx).', 'error');
+      return;
+    }
+
+    try {
+      setUploadBusy(true);
+      const parsed = await apiUploadBscExcel(file);
+      const scores = Array.isArray(parsed.data) ? parsed.data : [];
+
+      if (!scores.length) {
+        showToast(parsed.message || 'No scorecards found in the Excel file.', 'error');
+        return;
+      }
+
+      const periodHint = [state.filters.month, state.filters.year].filter(Boolean).join(' ');
+      const shouldSave = window.confirm(
+        `Parsed ${scores.length} scorecard${scores.length === 1 ? '' : 's'}${periodHint ? ` for ${periodHint}` : ''}. Save them to BSC master data?`
+      );
+      if (!shouldSave) {
+        showToast('Excel parsed successfully. Save was cancelled.', 'info');
+        return;
+      }
+
+      const saveResponse = await apiSend('POST', '/bsc/bulk-save', { scores, upsert: true });
+      await syncParsedAccessCredentials(parsed.accessCredentials);
+      await refreshDashboardData();
+      setActiveSection('bsc');
+      showToast(saveResponse.message || `${scores.length} scorecards saved successfully.`, 'success');
+    } catch (error) {
+      showToast(error.message || 'Failed to upload Excel file.', 'error');
+    } finally {
+      uploadInput.value = '';
+      setUploadBusy(false);
+    }
+  }
+
   function setActiveSection(section) {
     state.activeSection = section;
     document.querySelectorAll('[data-section]').forEach((button) => {
@@ -772,8 +871,9 @@
       showToast('Azure document browser placeholder. Link/API will be connected later.', 'info');
     });
     document.getElementById('upload-button').addEventListener('click', () => {
-      showToast('Excel upload will be converted in a later iteration.', 'info');
+      uploadInput.click();
     });
+    uploadInput.addEventListener('change', () => handleExcelFile(uploadInput.files?.[0]));
     document.getElementById('add-button').addEventListener('click', () => {
       showToast('Add BSC score will be converted in a later iteration.', 'info');
     });
@@ -823,13 +923,7 @@
     bindEvents();
 
     try {
-      const [scoreResponse, accessResponse] = await Promise.all([
-        apiGet('/bsc/score?summary=true'),
-        apiGet('/access-control'),
-      ]);
-      state.rows = Array.isArray(scoreResponse.data) ? scoreResponse.data : [];
-      syncAccessState(accessResponse);
-      setupFilters();
+      await refreshDashboardData();
       setActiveSection('bsc');
     } catch (error) {
       elements.table.hidden = true;
