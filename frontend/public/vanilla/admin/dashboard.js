@@ -3,8 +3,8 @@
   const PAGE_SIZE = 10;
   const UPLOAD_PREVIEW_PAGE_SIZE = 50;
   const MONTHS = [
-    'April', 'May', 'June', 'July', 'August', 'September',
-    'October', 'November', 'December', 'January', 'February', 'March',
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
   ];
 
   const state = {

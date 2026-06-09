@@ -41,7 +41,10 @@ const cleanText = (value) => String(value || '').trim();
 
 const normalizeName = (value) => cleanText(value).toLowerCase();
 
-const isGeneratedDealerMail = (value) => /^dealer_?\d+@gmail\.com$/i.test(cleanText(value));
+const getGeneratedDealerMailNumber = (value) => {
+  const match = cleanText(value).match(/^dealer_?(\d+)@gmail\.com$/i);
+  return match ? Number(match[1]) : 0;
+};
 
 const ensureDefaultLists = async () => {
   if ((await AccessZone.countDocuments()) === 0) {
@@ -318,22 +321,25 @@ const syncDealerCredentialsFromScores = async (scores = []) => {
     upsertNamedList(AccessRegion, dealerRows.map((row) => row.region).filter(Boolean)),
   ]);
 
+  await cleanupDealerCredentialsWithoutScores();
+
   const [zoneDocs, regionDocs, existingCredentials] = await Promise.all([
     AccessZone.find(),
     AccessRegion.find(),
-    DealerAccessCredential.find({
-      dealerCode: { $in: dealerRows.map((row) => row.dealerCode) },
-    }).lean(),
+    DealerAccessCredential.find().lean(),
   ]);
   const zoneLookup = buildLookup(zoneDocs);
   const regionLookup = buildLookup(regionDocs);
   const existingLookup = new Map(
     existingCredentials.map((credential) => [normalizeName(credential.dealerCode), credential])
   );
+  let nextGeneratedMailNumber = existingCredentials.reduce(
+    (maxNumber, credential) => Math.max(maxNumber, getGeneratedDealerMailNumber(credential.mailId)),
+    0
+  ) + 1;
 
-  const operations = dealerRows.map((row, index) => {
+  const operations = dealerRows.map((row) => {
     const existing = existingLookup.get(normalizeName(row.dealerCode));
-    const generatedMailId = `dealer_${index + 1}@gmail.com`;
     const setPayload = {
       dealerCode: row.dealerCode,
       dealerName: row.dealerName,
@@ -342,8 +348,9 @@ const syncDealerCredentialsFromScores = async (scores = []) => {
       isActive: true,
     };
 
-    if (!existing || !cleanText(existing.mailId) || isGeneratedDealerMail(existing.mailId)) {
-      setPayload.mailId = generatedMailId;
+    if (!existing || !cleanText(existing.mailId)) {
+      setPayload.mailId = `dealer_${nextGeneratedMailNumber}@gmail.com`;
+      nextGeneratedMailNumber += 1;
     }
     if (!existing || !cleanText(existing.password)) {
       setPayload.password = '1234';
