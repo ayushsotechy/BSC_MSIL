@@ -1,6 +1,7 @@
 (function () {
   const API_BASE_URL = window.BSC_API_BASE_URL || 'http://localhost:5001/api';
   const PAGE_SIZE = 10;
+  const UPLOAD_PREVIEW_PAGE_SIZE = 50;
   const MONTHS = [
     'April', 'May', 'June', 'July', 'August', 'September',
     'October', 'November', 'December', 'January', 'February', 'March',
@@ -17,6 +18,8 @@
     uploadAccessCredentials: [],
     page: 1,
     credentialsPage: 1,
+    uploadPreviewPage: 1,
+    defaultPeriodApplied: false,
     filters: {
       zone: '',
       region: '',
@@ -64,6 +67,9 @@
     uploadPreviewEmpty: document.getElementById('upload-preview-empty'),
     uploadPreviewTableWrap: document.getElementById('upload-preview-table-wrap'),
     uploadPreviewBody: document.getElementById('upload-preview-body'),
+    uploadPreviewFooter: document.getElementById('upload-preview-footer'),
+    uploadPreviewCount: document.getElementById('upload-preview-count'),
+    uploadPreviewPagination: document.getElementById('upload-preview-pagination'),
     previewUploadButton: document.getElementById('preview-upload-button'),
     saveUploadButton: document.getElementById('save-upload-button'),
     toastRegion: document.getElementById('toast-region'),
@@ -263,7 +269,7 @@
         _id: '',
         dealerCode,
         dealerName: row.dealerName || dealerCode,
-        mailId: `dealer${index + 1}@gmail.com`,
+        mailId: `dealer_${index + 1}@gmail.com`,
         password: '1234',
         zone: row.zone || '',
         region: row.region || '',
@@ -295,6 +301,40 @@
     }
   }
 
+  function getLatestPeriod(rows) {
+    const latest = (rows || []).find((row) => row?.month && row?.fiscalYear);
+    return latest
+      ? { month: String(latest.month || ''), year: String(latest.fiscalYear || '') }
+      : { month: '', year: '' };
+  }
+
+  function applyLatestPeriodFilter() {
+    if (state.defaultPeriodApplied || state.filters.month || state.filters.year) return;
+
+    const latestPeriod = getLatestPeriod(state.rows);
+    if (!latestPeriod.month || !latestPeriod.year) return;
+
+    state.filters.month = latestPeriod.month;
+    state.filters.year = latestPeriod.year;
+    state.defaultPeriodApplied = true;
+  }
+
+  function setVisiblePeriod(period) {
+    state.filters.month = String(period?.month || '').trim();
+    state.filters.year = String(period?.year || period?.fiscalYear || '').trim();
+    elements.monthFilter.value = state.filters.month;
+    elements.yearFilter.value = state.filters.year;
+    state.defaultPeriodApplied = true;
+  }
+
+  function syncFilterControls() {
+    elements.zoneFilter.value = state.filters.zone;
+    elements.regionFilter.value = state.filters.region;
+    elements.dealerFilter.value = state.filters.dealer;
+    elements.monthFilter.value = state.filters.month;
+    elements.yearFilter.value = state.filters.year;
+  }
+
   function setupFilters() {
     fillSelect(elements.zoneFilter, state.zones, 'All Zones');
     fillSelect(elements.regionFilter, state.regions, 'All Regions');
@@ -302,6 +342,7 @@
     fillSelect(elements.yearFilter, getAvailableYears(state.rows), 'All Years');
     fillSelect(elements.uploadMonth, MONTHS, 'Select Month');
     fillSelect(elements.uploadYear, getAvailableUploadYears(), 'Select Year');
+    syncFilterControls();
   }
 
   async function refreshDashboardData() {
@@ -311,6 +352,8 @@
     ]);
     state.rows = Array.isArray(scoreResponse.data) ? scoreResponse.data : [];
     syncAccessState(accessResponse);
+    applyLatestPeriodFilter();
+    setupFilters();
     state.page = 1;
     renderRows();
   }
@@ -356,8 +399,12 @@
   function resetUploadPreview() {
     state.uploadPreviewRows = [];
     state.uploadAccessCredentials = [];
+    state.uploadPreviewPage = 1;
     elements.uploadPreviewBody.innerHTML = '';
     elements.uploadPreviewTableWrap.hidden = true;
+    elements.uploadPreviewFooter.hidden = true;
+    elements.uploadPreviewPagination.innerHTML = '';
+    elements.uploadPreviewCount.textContent = 'Showing 0-0 of 0 dealers';
     elements.uploadPreviewEmpty.hidden = false;
     elements.uploadPreviewEmpty.textContent = 'Preview will appear here before saving.';
     elements.saveUploadButton.disabled = true;
@@ -387,16 +434,22 @@
 
     if (!rows.length) {
       elements.uploadPreviewTableWrap.hidden = true;
+      elements.uploadPreviewFooter.hidden = true;
       elements.uploadPreviewEmpty.hidden = false;
       elements.uploadPreviewEmpty.textContent = 'No valid dealer rows found in the selected sheet.';
       elements.saveUploadButton.disabled = true;
       return;
     }
 
-    rows.slice(0, 50).forEach((row, index) => {
+    const totalPages = Math.max(1, Math.ceil(rows.length / UPLOAD_PREVIEW_PAGE_SIZE));
+    state.uploadPreviewPage = Math.min(state.uploadPreviewPage, totalPages);
+    const startIndex = (state.uploadPreviewPage - 1) * UPLOAD_PREVIEW_PAGE_SIZE;
+    const pageRows = rows.slice(startIndex, startIndex + UPLOAD_PREVIEW_PAGE_SIZE);
+
+    pageRows.forEach((row, index) => {
       const tableRow = document.createElement('tr');
       [
-        index + 1,
+        startIndex + index + 1,
         row.dealerCode || '-',
         row.dealerName || '-',
         row.region || '-',
@@ -409,7 +462,12 @@
     });
 
     elements.uploadPreviewTableWrap.hidden = false;
+    elements.uploadPreviewFooter.hidden = false;
     elements.uploadPreviewEmpty.hidden = true;
+    const visibleStart = rows.length ? startIndex + 1 : 0;
+    const visibleEnd = Math.min(startIndex + UPLOAD_PREVIEW_PAGE_SIZE, rows.length);
+    elements.uploadPreviewCount.textContent = `Showing ${visibleStart}-${visibleEnd} of ${rows.length} dealers`;
+    renderUploadPreviewPagination(rows.length, totalPages);
     elements.saveUploadButton.disabled = false;
   }
 
@@ -440,6 +498,7 @@
       const response = await apiSendForm('/bsc/upload-excel', formData);
       state.uploadPreviewRows = Array.isArray(response.data) ? response.data : [];
       state.uploadAccessCredentials = Array.isArray(response.accessCredentials) ? response.accessCredentials : [];
+      state.uploadPreviewPage = 1;
       renderUploadPreview(state.uploadPreviewRows);
       setUploadBusy(false, `${state.uploadPreviewRows.length} dealer scorecards ready to save.`);
       showToast(response.message || 'Excel parsed successfully.', 'success');
@@ -470,6 +529,7 @@
       ]);
       state.rows = Array.isArray(scoreResponse.data) ? scoreResponse.data : [];
       syncAccessState(accessResponse);
+      setVisiblePeriod({ month: elements.uploadMonth.value, year: elements.uploadYear.value });
       state.page = 1;
       renderRows();
       closeUploadModal();
@@ -597,6 +657,14 @@
     return select;
   }
 
+  function makeReadonlyValue(value) {
+    const output = document.createElement('span');
+    output.className = 'access-readonly-value';
+    output.textContent = value || '-';
+    output.title = output.textContent;
+    return output;
+  }
+
   function makeMsilSelect(values, onChange) {
     const wrapper = document.createElement('div');
     wrapper.className = 'msil-picker';
@@ -701,8 +769,8 @@
       appendNodeCell(row, makeInput(credential.dealerCode, (value) => { credential.dealerCode = value; }));
       appendNodeCell(row, makeInput(credential.mailId, (value) => { credential.mailId = value; }));
       appendNodeCell(row, makeInput(credential.password, (value) => { credential.password = value; }));
-      appendNodeCell(row, makeSelect(credential.zone, state.zones, (value) => { credential.zone = value; }));
-      appendNodeCell(row, makeSelect(credential.region, state.regions, (value) => { credential.region = value; }));
+      appendNodeCell(row, makeReadonlyValue(credential.zone));
+      appendNodeCell(row, makeReadonlyValue(credential.region));
       appendNodeCell(row, makeMsilSelect(credential.msilPersons, (value) => { credential.msilPersons = value; }));
 
       const actions = document.createElement('div');
@@ -973,6 +1041,57 @@
     });
 
     makeButton('Next', Math.min(totalPages, state.page + 1), state.page === totalPages, false);
+  }
+
+  function renderUploadPreviewPagination(totalCount, totalPages) {
+    elements.uploadPreviewPagination.innerHTML = '';
+    if (!totalCount) return;
+
+    const makeButton = (label, page, disabled, active) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = label;
+      button.disabled = disabled;
+      if (active) button.classList.add('active');
+      button.addEventListener('click', () => {
+        state.uploadPreviewPage = page;
+        renderUploadPreview(state.uploadPreviewRows);
+      });
+      elements.uploadPreviewPagination.appendChild(button);
+    };
+
+    makeButton(
+      'Prev',
+      Math.max(1, state.uploadPreviewPage - 1),
+      state.uploadPreviewPage === 1,
+      false
+    );
+
+    const visiblePages = [...new Set([
+      1,
+      Math.max(1, state.uploadPreviewPage - 1),
+      state.uploadPreviewPage,
+      Math.min(totalPages, state.uploadPreviewPage + 1),
+      totalPages,
+    ])].sort((a, b) => a - b);
+
+    let previous = 0;
+    visiblePages.forEach((page) => {
+      if (page - previous > 1) {
+        const ellipsis = document.createElement('span');
+        ellipsis.textContent = '...';
+        elements.uploadPreviewPagination.appendChild(ellipsis);
+      }
+      makeButton(String(page), page, false, page === state.uploadPreviewPage);
+      previous = page;
+    });
+
+    makeButton(
+      'Next',
+      Math.min(totalPages, state.uploadPreviewPage + 1),
+      state.uploadPreviewPage === totalPages,
+      false
+    );
   }
 
   function renderCredentialsPagination(totalCount, totalPages) {

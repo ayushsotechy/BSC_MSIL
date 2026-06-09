@@ -333,6 +333,7 @@ const syncDealerCredentialsFromScores = async (scores = []) => {
 
   const operations = dealerRows.map((row, index) => {
     const existing = existingLookup.get(normalizeName(row.dealerCode));
+    const generatedMailId = `dealer_${index + 1}@gmail.com`;
     const setPayload = {
       dealerCode: row.dealerCode,
       dealerName: row.dealerName,
@@ -341,27 +342,20 @@ const syncDealerCredentialsFromScores = async (scores = []) => {
       isActive: true,
     };
 
-    if (existing && (!cleanText(existing.mailId) || isGeneratedDealerMail(existing.mailId))) {
-      setPayload.mailId = `dealer_${index + 1}@gmail.com`;
+    if (!existing || !cleanText(existing.mailId) || isGeneratedDealerMail(existing.mailId)) {
+      setPayload.mailId = generatedMailId;
     }
-    if (existing && !cleanText(existing.password)) {
+    if (!existing || !cleanText(existing.password)) {
       setPayload.password = '1234';
     }
-    if (existing && !(existing.msilPersons || []).length && ayush?._id) {
+    if ((!existing || !(existing.msilPersons || []).length) && ayush?._id) {
       setPayload.msilPersons = [ayush._id];
     }
 
     return {
       updateOne: {
         filter: { dealerCode: row.dealerCode },
-        update: {
-          $set: setPayload,
-          $setOnInsert: {
-            mailId: `dealer_${index + 1}@gmail.com`,
-            password: '1234',
-            msilPersons: ayush?._id ? [ayush._id] : [],
-          },
-        },
+        update: { $set: setPayload },
         upsert: true,
       },
     };

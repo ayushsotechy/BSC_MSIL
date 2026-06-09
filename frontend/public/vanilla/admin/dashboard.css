@@ -508,6 +508,15 @@ body {
   outline: none;
 }
 
+.access-readonly-value {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 12px;
+  color: #22345d;
+  font-weight: 800;
+}
+
 .access-row-actions {
   display: flex;
   align-items: center;
@@ -824,6 +833,20 @@ body {
 
 .upload-preview__table {
   min-width: 920px;
+}
+
+.upload-preview__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 0 0;
+  color: #23365f;
+  font-weight: 800;
+}
+
+.upload-preview__footer p {
+  margin: 0;
 }
 
 .upload-modal__footer {
