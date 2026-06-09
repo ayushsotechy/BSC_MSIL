@@ -1,6 +1,10 @@
 const XLSX = require('xlsx');
 const BscScore = require('../models/BscScore.model');
 const { parseBscWorkbookWithMetadata } = require('../utils/bscExcelParser');
+const {
+  syncDealerCredentialsFromScores,
+  cleanupDealerCredentialsWithoutScores,
+} = require('./accessControl.controller');
 
 const metricValue = (metric, key) => {
   if (metric && typeof metric === 'object') {
@@ -329,6 +333,7 @@ const createBscScore = async (req, res, next) => {
       // Temporarily removed until auth is restored
       // createdBy: req.user._id,
     });
+    await syncDealerCredentialsFromScores([req.body || score]);
     res.status(201).json({ success: true, data: score });
   } catch (error) {
     if (error.code === 11000) {
@@ -356,6 +361,7 @@ const updateBscScore = async (req, res, next) => {
     );
 
     if (!score) return res.status(404).json({ message: 'Score not found' });
+    await syncDealerCredentialsFromScores([req.body || score]);
     res.json({ success: true, data: score });
   } catch (error) {
     if (error.code === 11000) {
@@ -428,6 +434,7 @@ const bulkSaveBscScores = async (req, res, next) => {
     }
 
     const result = await BscScore.bulkWrite(operations, { ordered: false });
+    await syncDealerCredentialsFromScores(scores);
     const savedCount = (result.upsertedCount || 0) + (result.modifiedCount || 0);
     const matchedCount = result.matchedCount || 0;
     const skippedCount = shouldUpsert ? 0 : Math.max(0, operations.length - savedCount);
@@ -445,12 +452,29 @@ const bulkSaveBscScores = async (req, res, next) => {
     next(error);
   }
 };
+
+const deleteBscScore = async (req, res, next) => {
+  try {
+    const score = await BscScore.findByIdAndDelete(req.params.id);
+    if (!score) return res.status(404).json({ message: 'Score not found' });
+
+    const remainingScore = await BscScore.exists({ dealerCode: score.dealerCode });
+    if (!remainingScore) {
+      await cleanupDealerCredentialsWithoutScores();
+    }
+
+    res.json({ success: true, message: 'Score removed successfully.' });
+  } catch (error) {
+    next(error);
+  }
+};
 module.exports = {
   getBscScore,
   getBscScoreById,
   downloadScoreSheet,
   createBscScore,
   updateBscScore,
+  deleteBscScore,
   uploadBscExcel,
   bulkSaveBscScores,
 };

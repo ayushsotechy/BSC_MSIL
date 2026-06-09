@@ -463,7 +463,6 @@
         scores: state.uploadPreviewRows,
         upsert: true,
       });
-      await syncParsedAccessCredentials(state.uploadAccessCredentials);
       showToast(response.message || 'Scorecards saved successfully.', 'success');
       const [scoreResponse, accessResponse] = await Promise.all([
         apiGet('/bsc/score?summary=true'),
@@ -857,25 +856,6 @@
     }
   }
 
-  async function syncParsedAccessCredentials(credentials) {
-    const parsedCredentials = Array.isArray(credentials) ? credentials : [];
-    if (!parsedCredentials.length) return;
-
-    await apiSend('PUT', '/access-control', {
-      zones: uniqueValues([
-        ...state.zones,
-        ...parsedCredentials.map((credential) => credential.zone),
-      ]),
-      regions: uniqueValues([
-        ...state.regions,
-        ...parsedCredentials.map((credential) => credential.region),
-      ]),
-      msilPersons: state.msilPersons,
-      dealerCredentials: parsedCredentials,
-      returnData: false,
-    });
-  }
-
   function setLegacyUploadBusy(isBusy) {
     const uploadButton = document.getElementById('upload-button');
     uploadButton.disabled = isBusy;
@@ -920,7 +900,6 @@
       }
 
       const saveResponse = await apiSend('POST', '/bsc/bulk-save', { scores, upsert: true });
-      await syncParsedAccessCredentials(parsed.accessCredentials);
       await refreshDashboardData();
       selectUploadedPeriod(period);
       setActiveSection('bsc');

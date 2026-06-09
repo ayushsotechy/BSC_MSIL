@@ -778,7 +778,7 @@ const mergeWideTemplateRows = ({ earlyBirdRows, earlyBirdDisplayRows, fullYearRo
     id: `excel-dealer-${index + 1}`,
     dealerCode: score.dealerCode,
     dealerName: score.dealerName || score.dealerCode,
-    mailId: `dealer${index + 1}@gmail.com`,
+    mailId: `dealer_${index + 1}@gmail.com`,
     password: '1234',
     zone: score.zone || '',
     region: score.region || '',

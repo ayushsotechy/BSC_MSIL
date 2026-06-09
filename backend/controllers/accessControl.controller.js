@@ -4,6 +4,7 @@ const AccessZone = require('../models/AccessZone.model');
 const AccessRegion = require('../models/AccessRegion.model');
 const MsilAccess = require('../models/MsilAccess.model');
 const DealerAccessCredential = require('../models/DealerAccessCredential.model');
+const BscScore = require('../models/BscScore.model');
 
 const DEFAULT_ZONES = ['CENTRAL', 'EAST', 'NORTH', 'SOUTH', 'SOUTH EAST', 'WEST'];
 const DEFAULT_REGIONS = [
@@ -40,6 +41,8 @@ const cleanText = (value) => String(value || '').trim();
 
 const normalizeName = (value) => cleanText(value).toLowerCase();
 
+const isGeneratedDealerMail = (value) => /^dealer_?\d+@gmail\.com$/i.test(cleanText(value));
+
 const ensureDefaultLists = async () => {
   if ((await AccessZone.countDocuments()) === 0) {
     await Promise.all(DEFAULT_ZONES.map((name) =>
@@ -68,6 +71,7 @@ const ensureDefaultLists = async () => {
 
 const getSerializedAccessControl = async () => {
   await ensureDefaultLists();
+  await cleanupDealerCredentialsWithoutScores();
 
   const [zones, regions, msilPersons, dealerCredentials] = await Promise.all([
     AccessZone.find().sort({ createdAt: 1, name: 1 }).lean(),
@@ -197,6 +201,14 @@ const buildLookup = (docs) => {
   return lookup;
 };
 
+const ensureUploadMsilPerson = async () => {
+  const [ayush] = await upsertMsilPersons([
+    { name: 'ayush', mailId: 'ayush@gmail.com', password: '1234' },
+  ]);
+
+  return ayush;
+};
+
 const serializeDealerCredential = (credential) => ({
   id: String(credential._id),
   _id: String(credential._id),
@@ -259,6 +271,111 @@ const upsertDealerCredentials = async (rows, zoneLookup, regionLookup, msilLooku
     await DealerAccessCredential.bulkWrite(operations, { ordered: false });
   }
 };
+
+const cleanupDealerCredentialsWithoutScores = async () => {
+  const dealerCodes = (await BscScore.distinct('dealerCode'))
+    .map(cleanText)
+    .filter(Boolean);
+
+  if (!dealerCodes.length) {
+    await DealerAccessCredential.deleteMany({});
+    return;
+  }
+
+  await DealerAccessCredential.deleteMany({
+    dealerCode: { $nin: dealerCodes },
+  });
+};
+
+const syncDealerCredentialsFromScores = async (scores = []) => {
+  await ensureDefaultLists();
+  const ayush = await ensureUploadMsilPerson();
+
+  const dealerMap = new Map();
+  for (const score of scores || []) {
+    const dealerCode = cleanText(score?.dealerCode);
+    if (!dealerCode) continue;
+
+    const key = dealerCode.toLowerCase();
+    if (!dealerMap.has(key)) {
+      dealerMap.set(key, {
+        dealerCode,
+        dealerName: cleanText(score?.dealerName) || dealerCode,
+        zone: cleanText(score?.zone),
+        region: cleanText(score?.region),
+      });
+    }
+  }
+
+  const dealerRows = [...dealerMap.values()];
+  if (!dealerRows.length) {
+    await cleanupDealerCredentialsWithoutScores();
+    return;
+  }
+
+  await Promise.all([
+    upsertNamedList(AccessZone, dealerRows.map((row) => row.zone).filter(Boolean)),
+    upsertNamedList(AccessRegion, dealerRows.map((row) => row.region).filter(Boolean)),
+  ]);
+
+  const [zoneDocs, regionDocs, existingCredentials] = await Promise.all([
+    AccessZone.find(),
+    AccessRegion.find(),
+    DealerAccessCredential.find({
+      dealerCode: { $in: dealerRows.map((row) => row.dealerCode) },
+    }).lean(),
+  ]);
+  const zoneLookup = buildLookup(zoneDocs);
+  const regionLookup = buildLookup(regionDocs);
+  const existingLookup = new Map(
+    existingCredentials.map((credential) => [normalizeName(credential.dealerCode), credential])
+  );
+
+  const operations = dealerRows.map((row, index) => {
+    const existing = existingLookup.get(normalizeName(row.dealerCode));
+    const setPayload = {
+      dealerCode: row.dealerCode,
+      dealerName: row.dealerName,
+      zone: zoneLookup.get(normalizeName(row.zone))?._id,
+      region: regionLookup.get(normalizeName(row.region))?._id,
+      isActive: true,
+    };
+
+    if (existing && (!cleanText(existing.mailId) || isGeneratedDealerMail(existing.mailId))) {
+      setPayload.mailId = `dealer_${index + 1}@gmail.com`;
+    }
+    if (existing && !cleanText(existing.password)) {
+      setPayload.password = '1234';
+    }
+    if (existing && !(existing.msilPersons || []).length && ayush?._id) {
+      setPayload.msilPersons = [ayush._id];
+    }
+
+    return {
+      updateOne: {
+        filter: { dealerCode: row.dealerCode },
+        update: {
+          $set: setPayload,
+          $setOnInsert: {
+            mailId: `dealer_${index + 1}@gmail.com`,
+            password: '1234',
+            msilPersons: ayush?._id ? [ayush._id] : [],
+          },
+        },
+        upsert: true,
+      },
+    };
+  });
+
+  if (operations.length) {
+    await DealerAccessCredential.bulkWrite(operations, { ordered: false });
+  }
+
+  await cleanupDealerCredentialsWithoutScores();
+};
+
+exports.syncDealerCredentialsFromScores = syncDealerCredentialsFromScores;
+exports.cleanupDealerCredentialsWithoutScores = cleanupDealerCredentialsWithoutScores;
 
 exports.getAccessControl = async (req, res, next) => {
   try {
@@ -463,7 +580,7 @@ exports.deleteDealerCredential = async (req, res, next) => {
       return res.status(404).json({ message: 'Dealer credential not found.' });
     }
 
-    await DealerAccessCredential.updateOne({ _id: credential._id }, { $set: { isActive: false } });
+    await DealerAccessCredential.deleteOne({ _id: credential._id });
 
     return res.json({ success: true, message: 'Dealer credential removed successfully.' });
   } catch (error) {

@@ -9,6 +9,7 @@ const {
   downloadScoreSheet,
   createBscScore,
   updateBscScore,
+  deleteBscScore,
   uploadBscExcel,
   bulkSaveBscScores,
 } = require('../controllers/bsc.controller');
@@ -26,6 +27,7 @@ router.get('/score/:id/download', downloadScoreSheet);
 
 router.post('/score', createBscScore);
 router.put('/score/:id', updateBscScore);
+router.delete('/score/:id', deleteBscScore);
 
 router.post('/upload-excel', upload.single('file'), uploadBscExcel);
 router.post('/bulk-save', bulkSaveBscScores);
