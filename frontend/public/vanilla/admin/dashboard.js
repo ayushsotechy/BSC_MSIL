@@ -13,6 +13,7 @@
     msilPersons: [],
     zones: [],
     regions: [],
+    uploadPreviewRows: [],
     page: 1,
     credentialsPage: 1,
     filters: {
@@ -54,6 +55,16 @@
     zoneList: document.getElementById('zone-list'),
     regionList: document.getElementById('region-list'),
     msilTableBody: document.getElementById('msil-table-body'),
+    uploadModal: document.getElementById('upload-modal'),
+    uploadMonth: document.getElementById('upload-month'),
+    uploadYear: document.getElementById('upload-year'),
+    uploadFile: document.getElementById('upload-file'),
+    uploadStatus: document.getElementById('upload-modal-status'),
+    uploadPreviewEmpty: document.getElementById('upload-preview-empty'),
+    uploadPreviewTableWrap: document.getElementById('upload-preview-table-wrap'),
+    uploadPreviewBody: document.getElementById('upload-preview-body'),
+    previewUploadButton: document.getElementById('preview-upload-button'),
+    saveUploadButton: document.getElementById('save-upload-button'),
     toastRegion: document.getElementById('toast-region'),
   };
 
@@ -284,6 +295,8 @@
     fillSelect(elements.regionFilter, state.regions, 'All Regions');
     fillSelect(elements.monthFilter, MONTHS, 'All Months');
     fillSelect(elements.yearFilter, getAvailableYears(state.rows), 'All Years');
+    fillSelect(elements.uploadMonth, MONTHS, 'Select Month');
+    fillSelect(elements.uploadYear, getAvailableUploadYears(), 'Select Year');
   }
 
   async function refreshDashboardData() {
@@ -307,59 +320,6 @@
       .sort((first, second) => Number(second) - Number(first));
   }
 
-  function getDefaultUploadMonth() {
-    if (state.filters.month) return state.filters.month;
-    const currentMonth = new Date().toLocaleString('en-US', { month: 'long' });
-    return MONTHS.includes(currentMonth) ? currentMonth : MONTHS[0];
-  }
-
-  function getDefaultUploadYear() {
-    return state.filters.year || String(new Date().getFullYear());
-  }
-
-  function openUploadDialog() {
-    state.upload.file = null;
-    state.upload.month = getDefaultUploadMonth();
-    state.upload.year = getDefaultUploadYear();
-    uploadElements.year.value = state.upload.year;
-    uploadElements.month.value = state.upload.month;
-    uploadElements.fileName.textContent = 'No file selected';
-    uploadDialog.hidden = false;
-    uploadElements.year.focus();
-  }
-
-  function closeUploadDialog() {
-    uploadDialog.hidden = true;
-    state.upload.file = null;
-    uploadInput.value = '';
-  }
-
-  function getUploadPeriod() {
-    return {
-      year: String(uploadElements.year.value || '').trim(),
-      month: String(uploadElements.month.value || '').trim(),
-    };
-  }
-
-  function applyUploadPeriod(scores, period) {
-    return scores.map((score) => ({
-      ...score,
-      fiscalYear: period.year,
-      month: period.month,
-    }));
-  }
-
-  function selectUploadedPeriod(period) {
-    state.filters.month = period.month;
-    state.filters.year = period.year;
-    if ([...elements.monthFilter.options].some((option) => option.value === period.month)) {
-      elements.monthFilter.value = period.month;
-    }
-    if ([...elements.yearFilter.options].some((option) => option.value === period.year)) {
-      elements.yearFilter.value = period.year;
-    }
-  }
-
   function getFilteredRows() {
     const filters = state.filters;
     return state.rows.filter((row) => {
@@ -381,6 +341,130 @@
   function formatYearScore(row) {
     const score = row.fullYear?.score ?? row.yearScore ?? row.fullYearProvisionalScore ?? '';
     return score === '' || score === null || score === undefined ? '-' : `${score}`;
+  }
+
+  function resetUploadPreview() {
+    state.uploadPreviewRows = [];
+    elements.uploadPreviewBody.innerHTML = '';
+    elements.uploadPreviewTableWrap.hidden = true;
+    elements.uploadPreviewEmpty.hidden = false;
+    elements.uploadPreviewEmpty.textContent = 'Preview will appear here before saving.';
+    elements.saveUploadButton.disabled = true;
+  }
+
+  function openUploadModal() {
+    resetUploadPreview();
+    elements.uploadFile.value = '';
+    elements.uploadMonth.value = '';
+    elements.uploadYear.value = '';
+    elements.uploadStatus.textContent = 'Choose month, year, and Excel file to preview dealer scorecards.';
+    elements.uploadModal.hidden = false;
+  }
+
+  function closeUploadModal() {
+    elements.uploadModal.hidden = true;
+  }
+
+  function setUploadBusy(isBusy, message) {
+    elements.previewUploadButton.disabled = isBusy;
+    elements.saveUploadButton.disabled = isBusy || !state.uploadPreviewRows.length;
+    elements.uploadStatus.textContent = message;
+  }
+
+  function renderUploadPreview(rows) {
+    elements.uploadPreviewBody.innerHTML = '';
+
+    if (!rows.length) {
+      elements.uploadPreviewTableWrap.hidden = true;
+      elements.uploadPreviewEmpty.hidden = false;
+      elements.uploadPreviewEmpty.textContent = 'No valid dealer rows found in the selected sheet.';
+      elements.saveUploadButton.disabled = true;
+      return;
+    }
+
+    rows.slice(0, 50).forEach((row, index) => {
+      const tableRow = document.createElement('tr');
+      [
+        index + 1,
+        row.dealerCode || '-',
+        row.dealerName || '-',
+        row.region || '-',
+        row.month || '-',
+        row.fiscalYear || '-',
+        row.currentYearBand || row.fullYear?.band || 'NO BAND',
+        formatYearScore(row),
+      ].forEach((value) => appendCell(tableRow, value));
+      elements.uploadPreviewBody.appendChild(tableRow);
+    });
+
+    elements.uploadPreviewTableWrap.hidden = false;
+    elements.uploadPreviewEmpty.hidden = true;
+    elements.saveUploadButton.disabled = false;
+  }
+
+  async function previewExcelUpload() {
+    const month = elements.uploadMonth.value.trim();
+    const fiscalYear = elements.uploadYear.value.trim();
+    const file = elements.uploadFile.files?.[0];
+
+    if (!month || !fiscalYear) {
+      showToast('Please select month and year before uploading.', 'error');
+      return;
+    }
+
+    if (!file) {
+      showToast('Please choose an Excel file.', 'error');
+      return;
+    }
+
+    resetUploadPreview();
+    setUploadBusy(true, 'Parsing Excel and preparing preview...');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('month', month);
+      formData.append('fiscalYear', fiscalYear);
+
+      const response = await apiSendForm('/bsc/upload-excel', formData);
+      state.uploadPreviewRows = Array.isArray(response.data) ? response.data : [];
+      renderUploadPreview(state.uploadPreviewRows);
+      setUploadBusy(false, `${state.uploadPreviewRows.length} dealer scorecards ready to save.`);
+      showToast(response.message || 'Excel parsed successfully.', 'success');
+    } catch (error) {
+      resetUploadPreview();
+      setUploadBusy(false, error.message || 'Failed to preview Excel.');
+      showToast(error.message || 'Failed to preview Excel.', 'error');
+    }
+  }
+
+  async function saveExcelUpload() {
+    if (!state.uploadPreviewRows.length) {
+      showToast('Preview the Excel before saving.', 'error');
+      return;
+    }
+
+    setUploadBusy(true, 'Saving previewed scorecards to database...');
+
+    try {
+      const response = await apiSend('POST', '/bsc/bulk-save', {
+        scores: state.uploadPreviewRows,
+        upsert: true,
+      });
+      showToast(response.message || 'Scorecards saved successfully.', 'success');
+      const [scoreResponse, accessResponse] = await Promise.all([
+        apiGet('/bsc/score?summary=true'),
+        apiGet('/access-control'),
+      ]);
+      state.rows = Array.isArray(scoreResponse.data) ? scoreResponse.data : [];
+      syncAccessState(accessResponse);
+      state.page = 1;
+      renderRows();
+      closeUploadModal();
+    } catch (error) {
+      setUploadBusy(false, error.message || 'Failed to save scorecards.');
+      showToast(error.message || 'Failed to save scorecards.', 'error');
+    }
   }
 
   function renderRows() {
@@ -981,22 +1065,13 @@
       showToast('Azure document browser placeholder. Link/API will be connected later.', 'info');
     });
     document.getElementById('upload-button').addEventListener('click', () => {
-      openUploadDialog();
+      showToast('Excel upload will be converted in a later iteration.', 'info');
     });
-    uploadElements.browseButton.addEventListener('click', () => {
-      uploadInput.click();
+    document.querySelectorAll('[data-upload-close]').forEach((element) => {
+      element.addEventListener('click', closeUploadModal);
     });
-    uploadElements.submitButton.addEventListener('click', () => {
-      const period = getUploadPeriod();
-      handleExcelFile(state.upload.file, period);
-    });
-    uploadDialog.querySelectorAll('[data-upload-close]').forEach((button) => {
-      button.addEventListener('click', closeUploadDialog);
-    });
-    uploadInput.addEventListener('change', () => {
-      state.upload.file = uploadInput.files?.[0] || null;
-      uploadElements.fileName.textContent = state.upload.file ? state.upload.file.name : 'No file selected';
-    });
+    elements.previewUploadButton.addEventListener('click', previewExcelUpload);
+    elements.saveUploadButton.addEventListener('click', saveExcelUpload);
     document.getElementById('add-button').addEventListener('click', () => {
       showToast('Add BSC score will be converted in a later iteration.', 'info');
     });
