@@ -266,7 +266,7 @@
       viewButton.type = 'button';
       viewButton.textContent = 'View';
       viewButton.addEventListener('click', () => {
-        window.location.href = `../admin/score.html?id=${encodeURIComponent(row._id || row.id)}&mode=view`;
+        window.location.href = `../score/?id=${encodeURIComponent(row._id || row.id)}&mode=view`;
       });
       actionCell.appendChild(viewButton);
       tableRow.appendChild(actionCell);

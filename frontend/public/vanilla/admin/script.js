@@ -587,7 +587,7 @@
       editButton.type = 'button';
       editButton.textContent = 'Edit';
       editButton.addEventListener('click', () => {
-        window.location.href = `./score.html?id=${encodeURIComponent(row._id || row.id)}&mode=edit`;
+        window.location.href = `../score/?id=${encodeURIComponent(row._id || row.id)}&mode=edit`;
       });
 
       const viewButton = document.createElement('button');
@@ -595,7 +595,7 @@
       viewButton.type = 'button';
       viewButton.textContent = 'View';
       viewButton.addEventListener('click', () => {
-        window.location.href = `./score.html?id=${encodeURIComponent(row._id || row.id)}&mode=view`;
+        window.location.href = `../score/?id=${encodeURIComponent(row._id || row.id)}&mode=view`;
       });
 
       actionGroup.appendChild(editButton);
@@ -1002,6 +1002,11 @@
     if (['bsc', 'nsc'].includes(section)) renderRows();
   }
 
+  function getRequestedSection() {
+    const section = new URLSearchParams(window.location.search).get('section');
+    return ['bsc', 'nsc', 'credentials', 'control'].includes(section) ? section : 'bsc';
+  }
+
   function renderPagination(totalCount, totalPages) {
     elements.pagination.innerHTML = '';
     if (!totalCount) return;
@@ -1165,6 +1170,9 @@
     document.querySelectorAll('[data-section]').forEach((button) => {
       button.addEventListener('click', () => {
         setActiveSection(button.dataset.section);
+        const url = new URL(window.location.href);
+        url.searchParams.set('section', button.dataset.section);
+        window.history.replaceState({}, '', url);
       });
     });
 
@@ -1233,7 +1241,7 @@
 
     try {
       await refreshDashboardData();
-      setActiveSection('bsc');
+      setActiveSection(getRequestedSection());
     } catch (error) {
       elements.table.hidden = true;
       elements.tableLoading.hidden = false;
