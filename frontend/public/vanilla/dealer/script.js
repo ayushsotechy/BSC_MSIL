@@ -1028,6 +1028,11 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
   }
 
   function setScoreSection(section) {
+    if (section === 'nsc') {
+      window.location.href = '/vanilla/nsc/?role=dealer';
+      return;
+    }
+
     activeScoreSection = section === 'nsc' ? 'nsc' : 'bsc';
     document.querySelectorAll('[data-score-section]').forEach((button) => {
       button.classList.toggle('sidebar-item--active', button.dataset.scoreSection === activeScoreSection);

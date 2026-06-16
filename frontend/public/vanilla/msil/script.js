@@ -369,20 +369,23 @@
   }
 
   function setActiveSection(section) {
+    if (section === 'nsc') {
+      window.location.href = '/vanilla/nsc/?role=msil';
+      return;
+    }
+
     state.activeSection = section;
     document.querySelectorAll('[data-section]').forEach((button) => {
       button.classList.toggle('sidebar-item--active', button.dataset.section === section);
     });
-    elements.masterPanel.hidden = !['bsc', 'nsc'].includes(section);
+    elements.masterPanel.hidden = section !== 'bsc';
     elements.credentialsPanel.hidden = section !== 'credentials';
-    elements.pageTitle.textContent = section === 'nsc'
-      ? 'View NSC Master Data'
-      : section === 'credentials'
+    elements.pageTitle.textContent = section === 'credentials'
         ? 'Dealer Access Credentials'
         : 'View BSC Master Data';
     state.page = 1;
     if (section === 'credentials') renderCredentialRows();
-    if (['bsc', 'nsc'].includes(section)) renderRows();
+    if (section === 'bsc') renderRows();
   }
 
   function bindEvents() {

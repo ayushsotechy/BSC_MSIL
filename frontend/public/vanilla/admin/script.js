@@ -982,16 +982,19 @@
   }
 
   function setActiveSection(section) {
+    if (section === 'nsc') {
+      window.location.href = '/vanilla/nsc/?role=admin';
+      return;
+    }
+
     state.activeSection = section;
     document.querySelectorAll('[data-section]').forEach((button) => {
       button.classList.toggle('sidebar-item--active', button.dataset.section === section);
     });
-    elements.masterPanel.hidden = !['bsc', 'nsc'].includes(section);
+    elements.masterPanel.hidden = section !== 'bsc';
     elements.credentialsPanel.hidden = section !== 'credentials';
     elements.controlPanel.hidden = section !== 'control';
-    elements.pageTitle.textContent = section === 'nsc'
-      ? 'View NSC Master Data'
-      : section === 'credentials'
+    elements.pageTitle.textContent = section === 'credentials'
         ? 'Dealer Access Credentials'
         : section === 'control'
           ? 'Access Control'
@@ -999,12 +1002,16 @@
     state.page = 1;
     if (section === 'credentials') renderAccessCredentials();
     if (section === 'control') renderAccessControl();
-    if (['bsc', 'nsc'].includes(section)) renderRows();
+    if (section === 'bsc') renderRows();
   }
 
   function getRequestedSection() {
-    const section = new URLSearchParams(window.location.search).get('section');
-    return ['bsc', 'nsc', 'credentials', 'control'].includes(section) ? section : 'bsc';
+    const urlSection = new URLSearchParams(window.location.search).get('section');
+    const storedSection = sessionStorage.getItem('bsc_admin_section');
+    sessionStorage.removeItem('bsc_admin_section');
+
+    const section = urlSection || storedSection;
+    return ['bsc', 'credentials', 'control'].includes(section) ? section : 'bsc';
   }
 
   function renderPagination(totalCount, totalPages) {
@@ -1234,14 +1241,16 @@
   async function init() {
     const user = ensureAdmin();
     if (!user) return;
+    const requestedSection = getRequestedSection();
 
     elements.userName.textContent = user.dealerName || user.name || 'Admin';
     elements.userCode.textContent = user.dealerCode || user.role || 'ADMIN';
     bindEvents();
+    setActiveSection(requestedSection);
 
     try {
       await refreshDashboardData();
-      setActiveSection(getRequestedSection());
+      setActiveSection(requestedSection);
     } catch (error) {
       elements.table.hidden = true;
       elements.tableLoading.hidden = false;
